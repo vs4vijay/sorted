@@ -66,7 +66,11 @@ export function isUniqueConstraintViolation(error: unknown): boolean {
 export function mapUniqueViolationToSetupState(error: unknown): SetupConflictState | null {
   if (!isUniqueConstraintViolation(error)) return null;
   const hint = uniqueConstraintHint(error);
-  const emailTaken = hint.includes('users_email') || hint.includes('(email)');
+  const emailTaken =
+    hint.includes('users_email') ||
+    hint.includes('users_email_lower') ||
+    hint.includes('(email)') ||
+    hint.includes('lower(email)');
   const slugTaken =
     hint.includes('organizations_slug') || hint.includes('(slug)') || hint.includes('slug_key');
 

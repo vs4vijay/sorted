@@ -123,7 +123,7 @@ export class OrganizationAccessRepository {
   }): Promise<void> {
     await this.query(
       `WITH created_user AS (
-        INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $11) RETURNING id
+        INSERT INTO users (id, email, name, password_hash) VALUES ($1, LOWER($2), $3, $11) RETURNING id
       ), created_organization AS (
         INSERT INTO organizations (id, name, slug, timezone, default_locale)
         SELECT $4, $5, $6, $7, $8 FROM created_user RETURNING id
@@ -204,7 +204,7 @@ export class OrganizationAccessRepository {
     const rows = await this.query(
       `WITH created_invitation AS (
         INSERT INTO invitations (id, organization_id, email, role, token_hash, invited_by_id, expires_at)
-        SELECT $1, $2, $3, $4, $5, $6, $7
+        SELECT $1, $2, LOWER($3), $4, $5, $6, $7
         WHERE NOT EXISTS (
           SELECT 1 FROM invitations
           WHERE organization_id = $2 AND LOWER(email) = LOWER($3) AND status = 'pending' AND expires_at > CURRENT_TIMESTAMP

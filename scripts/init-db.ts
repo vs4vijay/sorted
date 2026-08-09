@@ -42,12 +42,14 @@ async function main() {
     await pglite.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
-        email TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL,
         name TEXT NOT NULL,
         password_hash TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_key ON users (LOWER(email));
 
       CREATE TABLE IF NOT EXISTS organizations (
         id TEXT PRIMARY KEY,

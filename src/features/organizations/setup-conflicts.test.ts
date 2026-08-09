@@ -50,6 +50,15 @@ describe('unique constraint mapping', () => {
     expect(isUniqueConstraintViolation({ message: 'connection refused' })).toBe(false);
   });
 
+  test('maps users_email_lower_key violations to the email field', () => {
+    expect(
+      mapUniqueViolationToSetupState({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "users_email_lower_key"',
+      }),
+    ).toEqual(setupConflictState({ emailTaken: true }));
+  });
+
   test('maps users_email_key violations to the email field', () => {
     expect(
       mapUniqueViolationToSetupState({
