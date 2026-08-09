@@ -54,6 +54,8 @@ When the database server is already running, `bun run db:seed` safely restores a
 demo rows without deleting or replacing existing data. The seed covers the local organization
 and panel, positions and rubrics, CV sources and evidence, evaluations, review and shortlist,
 approved simulated outreach, a candidate reply, and the recruiter-screening handoff.
+The primary synthetic login is `demo@sorted.local` / `demo`; do not use these credentials for a
+real workspace.
 
 Open [http://localhost:7070](http://localhost:7070).
 

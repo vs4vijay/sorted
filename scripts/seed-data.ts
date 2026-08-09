@@ -8,6 +8,9 @@ type SeedRow = {
 
 const ORG_ID = 'local-dev-organization';
 const ADMIN_ID = 'local-dev-user';
+// Synthetic demo credential only. This is a scrypt hash; the plaintext is never stored.
+const DEMO_PASSWORD_HASH =
+  'scrypt$7FOKi2igsl1qMBtExLfR_g$YUnL7JgcQXagBysk6gdGEWydzdpecNpcUXZiOOCNZf5e56CYlW17zluv6mzTtIj6JfQdd-iIwOM8CqfmfyjFSg';
 
 const json = (value: unknown) => JSON.stringify(value);
 
@@ -16,9 +19,9 @@ function rows(): SeedRow[] {
   const add = (table: string, columns: string[], values: unknown[]) =>
     result.push({ table, columns, values });
 
-  add('users', ['id', 'email', 'name'], [ADMIN_ID, 'developer@sorted.local', 'Ananya Rao']);
-  add('users', ['id', 'email', 'name'], ['seed-user-manager', 'vikram@sorted.local', 'Vikram Shah']);
-  add('users', ['id', 'email', 'name'], ['seed-user-reviewer', 'neha@sorted.local', 'Neha Kulkarni']);
+  add('users', ['id', 'email', 'name', 'password_hash'], [ADMIN_ID, 'demo@sorted.local', 'Demo User', DEMO_PASSWORD_HASH]);
+  add('users', ['id', 'email', 'name', 'password_hash'], ['seed-user-manager', 'vikram@sorted.local', 'Vikram Shah', DEMO_PASSWORD_HASH]);
+  add('users', ['id', 'email', 'name', 'password_hash'], ['seed-user-reviewer', 'neha@sorted.local', 'Neha Kulkarni', DEMO_PASSWORD_HASH]);
   add('organizations', ['id', 'name', 'slug', 'timezone', 'default_locale'], [ORG_ID, 'Sorted Local Workspace', 'sorted-local', 'Asia/Kolkata', 'en-IN']);
   add('organization_members', ['id', 'organization_id', 'user_id', 'role'], ['local-dev-membership', ORG_ID, ADMIN_ID, 'admin']);
   add('organization_members', ['id', 'organization_id', 'user_id', 'role'], ['seed-member-manager', ORG_ID, 'seed-user-manager', 'hiring_manager']);
@@ -128,7 +131,10 @@ export async function seedDatabase(execute: QueryExecutor) {
   for (const row of seedRows) {
     const columns = row.columns.join(', ');
     const placeholders = row.values.map((_, index) => `$${index + 1}`).join(', ');
-    await execute(`INSERT INTO ${row.table} (${columns}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`, row.values);
+    const conflict = row.table === 'users'
+      ? 'ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, password_hash = COALESCE(users.password_hash, EXCLUDED.password_hash), name = EXCLUDED.name'
+      : 'ON CONFLICT (id) DO NOTHING';
+    await execute(`INSERT INTO ${row.table} (${columns}) VALUES (${placeholders}) ${conflict}`, row.values);
   }
 
   return { rows: seedRows.length, organizationId: ORG_ID };
