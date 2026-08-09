@@ -75,8 +75,8 @@ export class PostgresQueue implements IQueue {
     const job = rowToJob(result[0]);
 
     await executeQuery(
-      `NOTIFY ${CHANNEL_NAME}, $1`,
-      [JSON.stringify({ jobId: job.id })]
+      `SELECT pg_notify($1, $2)`,
+      [CHANNEL_NAME, JSON.stringify({ jobId: job.id })]
     );
 
     return job;

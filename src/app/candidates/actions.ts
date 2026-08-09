@@ -1,0 +1,22 @@
+'use server';
+import { revalidatePath } from 'next/cache';
+import { requireCurrentAccess } from '@/lib/auth/session';
+import { CandidateIngestionRepository } from '@/features/candidates/repositories/candidate-ingestion-repository';
+import { validateCandidateDocument } from '@/features/candidates/services/document-validation';
+import { privateDocumentStorage } from '@/features/candidates/services/private-document-storage';
+import { enqueueJob } from '@/lib/worker';
+import { queue } from '@/lib/queue/postgres-queue';
+import { processCandidateDocument } from '@/workers/tasks/extract-cv-document';
+
+export type ImportState={error?:string;message?:string;skipped?:string[]};
+export async function importCandidates(_state:ImportState,formData:FormData):Promise<ImportState>{
+ try{const access=await requireCurrentAccess('candidates:manage');const files=formData.getAll('files').filter((v):v is File=>v instanceof File&&v.size>0);if(!files.length||files.length>20)return {error:'Choose between 1 and 20 PDF or DOCX CVs.'};const positionValue=String(formData.get('positionId')??'');const positionId=positionValue||undefined;const repo=new CandidateIngestionRepository();const accepted:{file:File;bytes:Uint8Array;checksum:string;mediaType:string}[]=[];const skipped:string[]=[];
+  for(const file of files){const bytes=new Uint8Array(await file.arrayBuffer());const valid=validateCandidateDocument(file,bytes);const duplicate=await repo.checksumExists(access.organization.id,valid.checksum);if(duplicate){skipped.push(`${file.name} already belongs to ${duplicate.display_name}.`);continue}accepted.push({file,bytes,checksum:valid.checksum,mediaType:valid.mediaType})}
+  if(!accepted.length)return {error:'No new documents were imported.',skipped};const runId=crypto.randomUUID();await repo.createRun({id:runId,organizationId:access.organization.id,positionId,count:accepted.length,actorId:access.userId,auditId:crypto.randomUUID()});
+  for(const item of accepted){const sourceId=crypto.randomUUID(),documentId=crypto.randomUUID(),storageKey=`${access.organization.id}/${documentId}`;await privateDocumentStorage.put(storageKey,item.bytes);await repo.createDocument({organizationId:access.organization.id,runId,sourceId,documentId,storageKey,filename:item.file.name,mediaType:item.mediaType,byteSize:item.file.size,checksum:item.checksum,actorId:access.userId});const job=await enqueueJob('extract-cv-document',{organizationId:access.organization.id,documentId},{jobKey:`extract-cv:${access.organization.id}:${item.checksum}`,queue:'candidate-ingestion',maxAttempts:3});if((process.env.DATABASE_URL??'file:').startsWith('file:')){await processCandidateDocument({organizationId:access.organization.id,documentId});await queue.completeJob(job.id)}}
+  revalidatePath('/candidates');return {message:`Imported ${accepted.length} CV${accepted.length===1?'':'s'} for processing.`,skipped};
+ }catch(error){return {error:error instanceof Error?error.message:'Candidate import failed.'}}
+}
+export async function mergeDuplicate(formData:FormData){const access=await requireCurrentAccess('candidates:manage');await new CandidateIngestionRepository().merge(access.organization.id,String(formData.get('reviewId')),access.userId);revalidatePath('/candidates')}
+export async function undoMerge(formData:FormData){const access=await requireCurrentAccess('candidates:manage');await new CandidateIngestionRepository().split(access.organization.id,String(formData.get('candidateId')),access.userId);revalidatePath('/candidates')}
+export async function addExternalSource(formData:FormData){const access=await requireCurrentAccess('candidates:manage');const provider=String(formData.get('provider'));const url=String(formData.get('url'));if(!['github','portfolio','linkedin'].includes(provider))throw new Error('Unsupported source type.');const parsed=new URL(url);if(!['http:','https:'].includes(parsed.protocol))throw new Error('Use an HTTPS profile URL.');await new CandidateIngestionRepository().addExternalSource({org:access.organization.id,candidateId:String(formData.get('candidateId')),actor:access.userId,provider,url:parsed.toString()});revalidatePath(`/candidates/${String(formData.get('candidateId'))}`)}

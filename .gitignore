@@ -46,6 +46,7 @@ dev.db
 *.sqlite-wal
 .pglite/
 pglite-data/
+.sorted-private/
 
 # vercel
 .vercel
