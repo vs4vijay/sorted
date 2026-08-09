@@ -49,6 +49,12 @@ bun run db:init
 bun run dev:next
 ```
 
+`db:init` creates the local PGlite schema and seeds a complete synthetic recruiting journey.
+When the database server is already running, `bun run db:seed` safely restores any missing
+demo rows without deleting or replacing existing data. The seed covers the local organization
+and panel, positions and rubrics, CV sources and evidence, evaluations, review and shortlist,
+approved simulated outreach, a candidate reply, and the recruiter-screening handoff.
+
 Open [http://localhost:7070](http://localhost:7070).
 
 Store the rotated Sarvam credential only in `.env.local` when a Sarvam-backed slice is implemented:

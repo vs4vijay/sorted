@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { PGlite } from '@electric-sql/pglite';
+import { seedDatabase } from './seed-data';
 
 export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } = {}) {
   console.log('📋 Creating tables...');
@@ -218,9 +219,8 @@ export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } =
   if (!options.seed) return;
 
   console.log('🌱 Seeding database...');
-
   await pglite.exec(`
-      INSERT INTO users (id,email,name) VALUES ('local-dev-user','developer@sorted.local','Local Developer') ON CONFLICT (id) DO NOTHING;
+      INSERT INTO users (id,email,name) VALUES ('local-dev-user','developer@sorted.local','Ananya Rao') ON CONFLICT (id) DO NOTHING;
       INSERT INTO organizations (id,name,slug,timezone,default_locale) VALUES ('local-dev-organization','Sorted Local Workspace','sorted-local','Asia/Kolkata','en-IN') ON CONFLICT (id) DO NOTHING;
       INSERT INTO organization_members (id,organization_id,user_id,role) VALUES ('local-dev-membership','local-dev-organization','local-dev-user','admin') ON CONFLICT (organization_id,user_id) DO NOTHING;
 
@@ -260,8 +260,8 @@ export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } =
         ('seed-criterion-analyst-3','local-dev-organization','seed-rubric-analyst','Data quality','Finds and resolves unreliable data.','experience','preferred',25,'Concrete audits, monitoring, or reconciliation work.',2)
       ON CONFLICT (id) DO NOTHING;
     `);
-
-  console.log('✅ Seeded 3 persisted recruiting positions and balanced rubrics');
+  const summary = await seedDatabase((sql, params = []) => pglite.query(sql, params));
+  console.log(`✅ Ensured ${summary.rows} synthetic recruiting workflow rows`);
   console.log('🎉 Database initialization complete!');
   console.log('');
   console.log('Next steps:');
