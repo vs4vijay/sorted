@@ -1,0 +1,3 @@
+import { AppShell, PageHeader } from '@/components/recruiting/app-shell'; import { Icon } from '@/components/recruiting/icons';
+export default function OutreachPage(){return <AppShell active="outreach"><PageHeader title="Outreach" description="Approved candidate communication, replies, and follow-ups in one place."/><div className="surface empty-state large"><span className="empty-icon"><Icon name="send" size={28}/></span><h2>No outreach threads yet</h2><p>When a recruiter approves a candidate message, its delivery and replies will appear here.</p><span className="simulation-label">Candidate outreach is introduced in Slice 7. Nothing has been sent.</span></div></AppShell>}
+

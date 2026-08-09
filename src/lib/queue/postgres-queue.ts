@@ -9,23 +9,25 @@ function generateId(): string {
   return `job_${timestamp}${randomStr}`;
 }
 
-function rowToJob(row: any): Job {
+type JobRow = Record<string, unknown>;
+
+function rowToJob(row: JobRow): Job {
   return {
-    id: row.id,
-    taskIdentifier: row.task_identifier,
-    payload: typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload,
-    status: row.status,
-    priority: row.priority,
-    runAt: new Date(row.run_at),
-    attempts: row.attempts,
-    maxAttempts: row.max_attempts,
-    lastError: row.last_error,
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
-    lockedAt: row.locked_at ? new Date(row.locked_at) : null,
-    lockedBy: row.locked_by,
-    completedAt: row.completed_at ? new Date(row.completed_at) : null,
-    queue: row.queue,
+    id: String(row.id),
+    taskIdentifier: String(row.task_identifier),
+    payload: (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as JobPayload,
+    status: String(row.status) as Job['status'],
+    priority: Number(row.priority),
+    runAt: new Date(String(row.run_at)),
+    attempts: Number(row.attempts),
+    maxAttempts: Number(row.max_attempts),
+    lastError: row.last_error ? String(row.last_error) : null,
+    createdAt: new Date(String(row.created_at)),
+    updatedAt: new Date(String(row.updated_at)),
+    lockedAt: row.locked_at ? new Date(String(row.locked_at)) : null,
+    lockedBy: row.locked_by ? String(row.locked_by) : null,
+    completedAt: row.completed_at ? new Date(String(row.completed_at)) : null,
+    queue: row.queue ? String(row.queue) : null,
   };
 }
 
@@ -98,7 +100,7 @@ export class PostgresQueue implements IQueue {
     const offset = filters?.offset || 0;
 
     let query = 'SELECT * FROM jobs WHERE 1=1';
-    const params: any[] = [];
+    const params: unknown[] = [];
     let paramIndex = 1;
 
     if (filters?.status) {
@@ -193,18 +195,19 @@ export class PostgresQueue implements IQueue {
     }
 
     try {
-      await (pglite as any).query(`LISTEN ${CHANNEL_NAME}`);
-
-      (pglite as any).onNotification = (notification: any) => {
-        if (notification.channel === CHANNEL_NAME) {
+      const unsubscribe = pglite.onNotification((channel, payload) => {
+        if (channel === CHANNEL_NAME) {
           try {
-            const data = JSON.parse(notification.payload);
+            const data = JSON.parse(payload) as { jobId?: string };
+            if (!data.jobId) return;
             callback(data.jobId);
           } catch (e) {
             console.error('Failed to parse notification:', e);
           }
         }
-      };
+      });
+      await pglite.query(`LISTEN ${CHANNEL_NAME}`);
+      return unsubscribe;
     } catch (e) {
       console.warn('⚠️  Could not subscribe to notifications:', e);
     }

@@ -103,11 +103,12 @@ export class Worker implements IWorker {
       await task(job.payload, job);
       await this.postgresQueue.completeJob(job.id);
       console.log(`✅ Job completed: ${job.id}`);
-    } catch (error: any) {
-      console.error(`❌ Job failed: ${job.id}`, error.message || error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Job failed: ${job.id}`, message);
 
       if (job.attempts >= job.maxAttempts) {
-        await this.postgresQueue.failJob(job.id, error.message || String(error));
+        await this.postgresQueue.failJob(job.id, message);
       } else {
         await this.postgresQueue.releaseJob(job.id);
       }

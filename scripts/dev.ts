@@ -5,9 +5,9 @@
  * Starts both Next.js dev server and Graphile Worker concurrently
  */
 
-import { spawn } from 'child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 
-const processes: any[] = [];
+const processes: ChildProcessWithoutNullStreams[] = [];
 
 // Color codes for console output
 const colors = {

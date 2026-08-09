@@ -80,12 +80,12 @@ export async function getPGliteInstance(): Promise<PGlite | null> {
 /**
  * Execute a query using PGlite or Prisma depending on environment
  */
-export async function executeQuery<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+export async function executeQuery<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
   const pglite = await getPGliteInstance();
 
   if (pglite) {
     // Use PGlite directly
-    const result = await pglite.query(sql, params);
+    const result = await pglite.query(sql, params as never[]);
     return result.rows as T[];
   }
 

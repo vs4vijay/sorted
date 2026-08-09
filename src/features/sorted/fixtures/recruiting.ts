@@ -1,0 +1,19 @@
+import { CandidateSchema, PositionSchema } from '@/features/sorted/schemas/recruiting';
+
+export const organization = { id: 'org_acme_india', name: 'Acme India', locale: 'en-IN' } as const;
+
+export const positions = PositionSchema.array().parse([
+  { id: 'senior-backend-engineer', title: 'Senior Backend Engineer', location: 'Bengaluru · Hybrid', employmentType: 'Full-time', status: 'screening', candidateCount: 12, reviewedCount: 7, panel: [{ name: 'Ananya Rao', initials: 'AR', role: 'Recruiter' }, { name: 'Vikram Shah', initials: 'VS', role: 'Hiring manager' }, { name: 'Neha Kulkarni', initials: 'NK', role: 'Technical reviewer' }] },
+  { id: 'product-designer', title: 'Product Designer', location: 'Mumbai · Hybrid', employmentType: 'Full-time', status: 'rubric_review', candidateCount: 5, reviewedCount: 0, panel: [{ name: 'Ananya Rao', initials: 'AR', role: 'Recruiter' }] },
+  { id: 'data-analyst', title: 'Data Analyst', location: 'Remote · India', employmentType: 'Contract', status: 'draft', candidateCount: 0, reviewedCount: 0, panel: [{ name: 'Ananya Rao', initials: 'AR', role: 'Recruiter' }] },
+]);
+
+export const candidates = CandidateSchema.array().parse([
+  { id: 'priya-menon', name: 'Priya Menon', initials: 'PM', headline: 'Backend Engineer at Razorpay', location: 'Bengaluru', experienceYears: 7, primarySkills: ['Go', 'PostgreSQL', 'Kafka'], profileCompleteness: 94, evidenceConfidence: 91, source: 'CV upload', stage: 'under_review', positionId: 'senior-backend-engineer', roleFit: 88, lastActivity: '12 min ago' },
+  { id: 'arjun-nair', name: 'Arjun Nair', initials: 'AN', headline: 'Senior Software Engineer at Freshworks', location: 'Chennai', experienceYears: 8, primarySkills: ['Java', 'AWS', 'Distributed systems'], profileCompleteness: 89, evidenceConfidence: 86, source: 'CV upload', stage: 'under_review', positionId: 'senior-backend-engineer', roleFit: 84, lastActivity: '36 min ago' },
+  { id: 'kavya-iyer', name: 'Kavya Iyer', initials: 'KI', headline: 'Platform Engineer at CRED', location: 'Bengaluru', experienceYears: 6, primarySkills: ['Kubernetes', 'Go', 'Observability'], profileCompleteness: 92, evidenceConfidence: 88, source: 'Referral', stage: 'shortlisted', positionId: 'senior-backend-engineer', roleFit: 82, lastActivity: '1 hr ago' },
+  { id: 'rohan-mehta', name: 'Rohan Mehta', initials: 'RM', headline: 'Software Engineer at Postman', location: 'Gurugram', experienceYears: 5, primarySkills: ['TypeScript', 'Node.js', 'Redis'], profileCompleteness: 77, evidenceConfidence: 68, source: 'CV upload', stage: 'applied', positionId: 'senior-backend-engineer', roleFit: 74, lastActivity: '3 hrs ago' },
+  { id: 'sana-khan', name: 'Sana Khan', initials: 'SK', headline: 'Backend Developer at Meesho', location: 'Pune', experienceYears: 4, primarySkills: ['Python', 'Django', 'PostgreSQL'], profileCompleteness: 81, evidenceConfidence: 72, source: 'Talent pool', stage: 'talent_pool', positionId: null, roleFit: null, lastActivity: 'Yesterday' },
+  { id: 'dev-patel', name: 'Dev Patel', initials: 'DP', headline: 'Software Engineer at BrowserStack', location: 'Mumbai', experienceYears: 6, primarySkills: ['Ruby', 'AWS', 'MySQL'], profileCompleteness: 73, evidenceConfidence: 64, source: 'Talent pool', stage: 'talent_pool', positionId: null, roleFit: null, lastActivity: '2 days ago' },
+]);
+
