@@ -55,4 +55,6 @@ pglite-data/
 *.tsbuildinfo
 next-env.d.ts
 
+.images/ppt-images/node_modules
+
 :memory:/
