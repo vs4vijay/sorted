@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { PGlite } from '@electric-sql/pglite';
+import { EXECUTION_TABLES_SQL } from '../src/features/sorted/workflows/execution/sql';
 
 function generateCuid() {
   const timestamp = Date.now().toString(36);
@@ -63,6 +64,10 @@ async function main() {
       CREATE INDEX IF NOT EXISTS jobs_priority_run_at_idx ON jobs (priority, run_at);
       CREATE INDEX IF NOT EXISTS jobs_key_idx ON jobs (key);
     `);
+
+    console.log('🧭 Creating workflow execution tables...');
+
+    await pglite.exec(EXECUTION_TABLES_SQL);
 
     console.log('✅ Database schema created successfully');
 

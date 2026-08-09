@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start -p 7070",
     "lint": "eslint",
+    "test": "bun test src",
     "db:generate": "prisma generate",
     "db:init": "bun run scripts/init-db.ts",
     "db:push": "prisma db push",

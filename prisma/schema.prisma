@@ -39,3 +39,65 @@ model Job {
   @@index([status, runAt])
   @@index([priority, runAt])
 }
+
+// Workflow execution (see src/features/sorted/workflows/execution).
+// Prisma documents this schema; application access goes through raw
+// parameterized SQL in executeQuery(). DDL source of truth for PGlite:
+// src/features/sorted/workflows/execution/sql.ts
+
+model WorkflowRun {
+  id             String    @id
+  runNumber      Int       @map("run_number")
+  workflowId     String    @map("workflow_id")
+  workflowName   String    @map("workflow_name")
+  triggerSummary String    @map("trigger_summary")
+  customerName   String?   @map("customer_name")
+  conversationId String?   @map("conversation_id")
+  status         String
+  statusReason   String?   @map("status_reason")
+  simulated      Boolean   @default(true)
+  startedAt      DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt        DateTime? @map("ended_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("workflow_runs")
+  @@index([status, startedAt])
+  @@index([workflowId, startedAt])
+}
+
+model WorkflowRunStep {
+  id                   String    @id
+  runId                String    @map("run_id")
+  stepIndex            Int       @map("step_index")
+  name                 String
+  kind                 String
+  actor                String?
+  status               String
+  attempts             Int       @default(0)
+  plannedDurationMs    Int?      @map("planned_duration_ms")
+  elapsedBeforePauseMs Int?      @map("elapsed_before_pause_ms")
+  startedAt            DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt          DateTime? @map("completed_at") @db.Timestamptz(6)
+  summary              String?
+  output               Json?
+  error                Json?
+
+  @@map("workflow_run_steps")
+  @@index([runId, stepIndex])
+}
+
+model WorkflowRunEvent {
+  id          String   @id
+  runId       String   @map("run_id")
+  stepId      String?  @map("step_id")
+  seq         Int
+  eventType   String   @map("event_type")
+  level       String   @default("info")
+  title       String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("workflow_run_events")
+  @@index([runId, seq])
+}
