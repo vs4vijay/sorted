@@ -44,7 +44,7 @@ export class CandidateIngestionRepository {
     actorId: string;
   }) {
     await this.query(
-      `WITH s AS (INSERT INTO candidate_sources(id,organization_id,ingestion_run_id,source_type,permission_method,status,source_label,imported_by_id) VALUES($1,$2,$3,'cv_upload','recruiter_provided','uploaded',$4,$5)) INSERT INTO candidate_documents(id,organization_id,source_id,storage_key,original_filename,media_type,byte_size,checksum,malware_scan_status) VALUES($6,$2,$1,$7,$4,$8,$9,$10,'passed_signature_scan')`,
+      `WITH s AS (INSERT INTO candidate_sources(id,organization_id,ingestion_run_id,source_type,permission_method,status,source_label,imported_by_id) VALUES($1,$2,$3,'cv_upload','recruiter_provided','scanning',$4,$5)) INSERT INTO candidate_documents(id,organization_id,source_id,storage_key,original_filename,media_type,byte_size,checksum,malware_scan_status) VALUES($6,$2,$1,$7,$4,$8,$9,$10,'pending')`,
       [
         input.sourceId,
         input.organizationId,
@@ -59,6 +59,14 @@ export class CandidateIngestionRepository {
       ],
     );
   }
+  async recordMalwareScan(input:{org:string;documentId:string;actorId:string;status:'clean'|'clean_simulated'|'quarantined'|'scan_failed';provider:string;engineVersion:string;requestId?:string;error?:string}){
+    const rows=await this.query(
+      `WITH d AS (UPDATE candidate_documents SET malware_scan_status=$3,malware_scan_provider=$4,malware_scan_version=$5,malware_scan_request_id=$6,malware_scan_error=$7,malware_scanned_at=CURRENT_TIMESTAMP WHERE organization_id=$1 AND id=$2 RETURNING source_id), s AS (UPDATE candidate_sources SET status=CASE WHEN $3 IN ('clean','clean_simulated') THEN 'uploaded' ELSE 'quarantined' END,warnings=CASE WHEN $7::TEXT IS NULL THEN '[]'::JSON ELSE json_build_array($7::TEXT) END WHERE organization_id=$1 AND id=(SELECT source_id FROM d) RETURNING ingestion_run_id), r AS (UPDATE ingestion_runs SET failed_count=failed_count+CASE WHEN $3 IN ('quarantined','scan_failed') THEN 1 ELSE 0 END,updated_at=CURRENT_TIMESTAMP,status=CASE WHEN $3 IN ('quarantined','scan_failed') AND completed_count+failed_count+1>=total_count THEN 'completed_with_errors' ELSE status END WHERE organization_id=$1 AND id=(SELECT ingestion_run_id FROM s)) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) SELECT $8,$1,$9,'candidate_document.security_scanned','candidate_document',$2,json_build_object('status',$3::TEXT,'provider',$4::TEXT,'engine_version',$5::TEXT) WHERE EXISTS(SELECT 1 FROM d) RETURNING subject_id`,
+      [input.org,input.documentId,input.status,input.provider,input.engineVersion,input.requestId??null,input.error??null,crypto.randomUUID(),input.actorId],
+    );
+    return Boolean(rows[0]);
+  }
+  async listQuarantined(org:string){return this.query(`SELECT d.id,d.original_filename,d.malware_scan_status,d.malware_scan_provider,d.malware_scan_error,d.malware_scanned_at,s.source_label FROM candidate_documents d JOIN candidate_sources s ON s.id=d.source_id AND s.organization_id=d.organization_id WHERE d.organization_id=$1 AND d.malware_scan_status IN ('quarantined','scan_failed') ORDER BY d.created_at DESC`,[org]) as Promise<Record<string,unknown>[]>}
   async getDocument(org: string, documentId: string) {
     const rows = await this.query(
       `SELECT d.*,s.status,s.ingestion_run_id,s.source_label,s.candidate_id,r.position_id,r.created_by_id FROM candidate_documents d JOIN candidate_sources s ON s.id=d.source_id JOIN ingestion_runs r ON r.id=s.ingestion_run_id WHERE d.organization_id=$1 AND d.id=$2`,
@@ -68,7 +76,7 @@ export class CandidateIngestionRepository {
   }
   async markExtracting(org: string, sourceId: string) {
     await this.query(
-      `UPDATE candidate_sources SET status='extracting' WHERE organization_id=$1 AND id=$2 AND status IN ('uploaded','scanning','failed')`,
+      `UPDATE candidate_sources s SET status='extracting' WHERE s.organization_id=$1 AND s.id=$2 AND s.status IN ('uploaded','failed') AND EXISTS(SELECT 1 FROM candidate_documents d WHERE d.organization_id=$1 AND d.source_id=s.id AND d.malware_scan_status IN ('clean','clean_simulated'))`,
       [org, sourceId],
     );
   }

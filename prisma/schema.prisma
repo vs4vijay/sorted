@@ -262,6 +262,7 @@ enum DocumentProcessingStatus {
   parsed
   needs_review
   failed
+  quarantined
 }
 
 enum DuplicateClassification {
@@ -545,6 +546,11 @@ model CandidateDocument {
   checksum             String
   pageCount            Int?            @map("page_count")
   malwareScanStatus    String          @map("malware_scan_status")
+  malwareScanProvider  String?         @map("malware_scan_provider")
+  malwareScanVersion   String?         @map("malware_scan_version")
+  malwareScanRequestId String?         @map("malware_scan_request_id")
+  malwareScanError     String?         @map("malware_scan_error")
+  malwareScannedAt     DateTime?       @map("malware_scanned_at")
   pdfType              String?         @map("pdf_type")
   parsedTextMarkdown   String?         @map("parsed_text_markdown")
   pagesNeedingOcr      Json            @default("[]") @map("pages_needing_ocr")
