@@ -27,12 +27,23 @@ export const OrganizationMemberSchema = z.object({
   role: OrganizationRoleSchema,
 });
 
+export const ResolvedOrganizationAccessSchema = z.object({
+  sessionId: z.string().min(1),
+  userId: z.string().min(1),
+  userEmail: z.email(),
+  userName: z.string().min(1),
+  organization: OrganizationSchema,
+  membership: OrganizationMemberSchema,
+});
+
 export const CreateInvitationInputSchema = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email()),
   role: OrganizationRoleSchema,
 });
 
 export type OrganizationRole = z.infer<typeof OrganizationRoleSchema>;
+export type ResolvedOrganizationAccess = z.infer<typeof ResolvedOrganizationAccessSchema>;
+export type OrganizationPermission = typeof rolePermissions[OrganizationRole][number];
 
 export const rolePermissions = {
   admin: ['organization:manage', 'members:manage', 'candidates:manage', 'candidates:export', 'positions:manage', 'reviews:submit'],
@@ -41,6 +52,6 @@ export const rolePermissions = {
   technical_reviewer: ['reviews:submit'],
 } as const satisfies Record<OrganizationRole, readonly string[]>;
 
-export function roleCan(role: OrganizationRole, permission: string): boolean {
+export function roleCan(role: OrganizationRole, permission: OrganizationPermission): boolean {
   return (rolePermissions[role] as readonly string[]).includes(permission);
 }
