@@ -1,556 +1,934 @@
-# Sorted — Vertical-Slice Plan to Production
+# Sorted Recruiting — Vertical-Slice Delivery Plan
 
-## Purpose
+## 1. Product definition
 
-This plan takes Sorted from its current UI-first hackathon prototype to a live, secure, observable product. Work is organized as **vertical slices**: every phase delivers a usable customer outcome through the UI, domain layer, database, integrations, tests, and operations. A phase is complete only when its end-to-end acceptance criteria pass.
+Sorted is an **evidence-first AI screening workspace for Indian hiring teams**. It helps recruiters, hiring managers, and technical reviewers turn inbound CVs into structured candidate profiles, compare candidates against an approved job rubric, collaborate on shortlisting, and move qualified candidates into recruiter screening through approved outreach and follow-ups.
 
-## Current state
-
-### Already available
-
-- Responsive Dashboard, AI Inbox, and Workflows views
-- A reusable workflow composer
-- Multilingual demo conversation and simulated AI interpretation
-- Visual workflow canvas and simulated execution progress
-- Human-approval concept
-- Sarvam touchpoints for Saaras, Sarvam-105B, and Bulbul
-- Next.js 16, React 19, Bun, Tailwind CSS, PGlite/PostgreSQL abstraction, and a PostgreSQL job-queue foundation
-- Production build succeeds
-
-### Still pending
-
-- Authentication, account/workspace isolation, and onboarding
-- Sorted-specific database schema, migrations/init scripts, seed data, and repositories
-- Server-backed Dashboard, Inbox, Workflows, runs, approvals, and notifications
-- Real Sarvam authentication and API adapters
-- Audio upload/recording, transcription, and generated voice playback
-- Durable workflow execution, retries, idempotency, and recovery
-- A real inbound/outbound customer channel
-- Security hardening, privacy controls, retention, and audit logging
-- End-to-end, integration, accessibility, and failure-path tests
-- Production infrastructure, CI/CD, monitoring, alerting, backups, and runbooks
-
-## Product invariant
-
-Dashboard, AI Inbox, and Workflows are three views of the same domain state:
+The initial product stops at the interview boundary.
 
 ```text
-Conversation → Understanding → Suggested action → Workflow → Run → Approval → Outcome
-       ↑                                                                  │
-       └──────────────────── updated conversation state ──────────────────┘
+Create position
+→ Import CVs
+→ Build evidence profiles
+→ Match against an approved rubric
+→ Panel reviews and shortlists
+→ Send approved outreach
+→ Collect response and missing information
+→ Move to recruiter screening
 ```
 
-No slice should introduce a second source of truth for any part of this lifecycle.
+### Initial target customer
 
-## Definition of done for every slice
+- Indian technology companies with approximately 50–500 employees
+- Startups without a dedicated talent-intelligence function
+- Recruitment agencies screening technical candidates
+- Teams processing tens or hundreds of CVs for a position
 
-Each vertical slice must include:
+### Primary users
 
-- A user-visible outcome that can be demonstrated without database editing
-- Typed domain contracts and Zod validation at external boundaries
-- Parameterized SQL through `executeQuery()` and PGlite/PostgreSQL compatibility
-- Loading, empty, success, validation-error, provider-error, and retry states
-- Authorization checks at the server boundary
-- Business-readable audit events for important actions
-- Unit/integration coverage for core rules and Playwright coverage for the happy path
-- No secrets, database files, customer exports, or generated customer media committed to Git
-- Relevant documentation and `.env.example` updates
-- A successful `bun run build`
+- **Recruiter/HR:** imports candidates, corrects profiles, manages applications and outreach.
+- **Hiring manager:** creates positions, approves evaluation rubrics, and owns shortlist decisions.
+- **Technical reviewer:** validates technical evidence and provides structured feedback.
+- **Organization administrator:** manages members, access, retention, integrations, and policy.
+
+### Product promise
+
+> Drop in CVs, understand the evidence behind every candidate, compare them fairly against an approved hiring rubric, and keep shortlisted talent moving.
+
+## 2. Product boundaries
+
+### Included in the initial product
+
+- Organization workspaces and hiring-panel roles
+- Position and job-description management
+- Single and bulk CV upload
+- Candidate ingestion from CVs, authorized LinkedIn data, GitHub, portfolio URLs, CSV, email, and future provider adapters
+- Candidate Evidence Profiles
+- Candidate talent pool independent of positions
+- Duplicate candidate detection and profile merging
+- Cross-source identity resolution with human-reviewed merge and split controls
+- Position-specific, explainable scorecards
+- Panel review and shortlist decisions
+- Email outreach and follow-up sequences
+- Candidate reply and missing-information tracking
+- Auditability, privacy controls, export, and deletion
+
+### Explicitly excluded initially
+
+- AI-led interviews
+- Video interviews and interview recording
+- Coding assessments
+- Interview scheduling
+- Job-board publishing
+- Offer and compensation approval workflows
+- Background verification
+- Employee onboarding and HRMS features
+- Autonomous rejection
+- Unapproved autonomous outreach
+- Full ATS replacement
+- LinkedIn scraping
+
+These exclusions protect the core outcome: producing a trustworthy shortlist and moving it to recruiter screening.
+
+## 3. Core domain model
+
+### Organization and access
+
+- `User`
+- `Organization`
+- `OrganizationMember`
+- `Role`: `admin`, `recruiter`, `hiring_manager`, `technical_reviewer`
+
+### Hiring
+
+- `Position`
+- `JobDescription`
+- `EvaluationRubric`
+- `RubricCriterion`
+- `HiringPanelMember`
+
+### Candidate intelligence
+
+- `Candidate`
+- `CandidateDocument`
+- `CandidateIdentity`
+- `Employment`
+- `Education`
+- `Project`
+- `Skill`
+- `Certification`
+- `ExternalProfileLink`
+- `EvidenceClaim`
+- `EvidenceSource`
+
+### Application and evaluation
+
+- `Application`
+- `CandidateEvaluation`
+- `CriterionEvaluation`
+- `PanelReview`
+- `ShortlistDecision`
+- `PipelineStage`
+
+### Communication
+
+- `OutreachThread`
+- `OutreachMessage`
+- `OutreachSequence`
+- `OutreachStep`
+- `CandidateResponse`
+- `ConsentRecord`
+- `OptOut`
+
+### Operations
+
+- `Notification`
+- `AuditEvent`
+- `BackgroundJob`
+- `ProviderExecution`
+
+## 4. Product invariants
+
+1. A `Candidate` exists independently of a position; an `Application` connects the candidate to a position.
+2. A candidate has one organization-scoped evidence profile that can support several applications.
+3. Every extracted or inferred claim retains its source and extraction version.
+4. Role fit and evidence confidence are separate values.
+5. AI recommendations never become hiring decisions automatically.
+6. Rubrics are approved by a human before candidate ranking begins.
+7. Published rubric versions and completed evaluations remain auditable.
+8. Protected or irrelevant personal attributes do not influence matching.
+9. Candidate-facing messages require approval until an organization explicitly configures a safe automation policy.
+10. Every query and mutation is organization-scoped at the server boundary.
+
+## 5. Shared definition of done
+
+Every vertical slice must include:
+
+- A demonstrable user outcome through the real UI
+- Typed domain contracts and Zod validation
+- PGlite/PostgreSQL-compatible, parameterized SQL through `executeQuery()`
+- Organization authorization at server boundaries
+- Loading, empty, success, validation, and failure states
+- Audit events for material hiring actions
+- Accessibility and responsive behavior
+- Unit or integration coverage for domain rules
+- Playwright coverage for the primary happy path
+- Updated fixtures, documentation, and `.env.example` where relevant
+- No credentials, CVs, candidate data, generated media, or local database files committed to Git
+- Successful `bun run build`
 
 ---
 
-## Slice 0 — Production foundation and safe deployment
+# Vertical slices
+
+## Slice 0 — Reframe the prototype and establish delivery foundations
 
 ### User outcome
 
-A private preview deployment is reachable by the team, has a real PostgreSQL database, and can be promoted safely without exposing secrets or customer data.
+The team can open a private preview of Sorted Recruiting and understand the new product through a coherent recruitment-oriented shell rather than the previous customer-operations prototype.
 
 ### Scope
 
-#### Application
+#### Product shell
 
-- Choose a hosting target for the Next.js app and a compatible long-running worker target.
-- Provision development, preview, and production environments.
-- Provision managed PostgreSQL with TLS, automated backups, and point-in-time recovery if available.
-- Add `/api/health` and `/api/ready` endpoints. Readiness must verify required configuration and database connectivity without exposing sensitive details.
-- Add typed environment validation at startup.
-- Separate browser-safe environment variables from server-only credentials.
+- Replace navigation with `Dashboard`, `Positions`, `Candidates`, and `Outreach`.
+- Replace conversation/workflow demo content with recruitment fixtures.
+- Establish position and candidate detail page layouts.
+- Add a persistent “Import candidates” action.
+- Remove or gate inherited starter pages such as Items and the technical Jobs dashboard.
 
-#### Delivery
+#### Delivery foundation
 
-- Add CI for dependency installation, lint/type checks, production build, and tests.
-- Protect `main`; require passing CI before deployment.
-- Configure preview deployments for pull requests and production deployment from `main`.
-- Add a migration/deployment procedure that cannot apply production schema changes from a developer laptop accidentally.
+- Add typed environment validation.
+- Add `/api/health` and `/api/ready`.
+- Configure CI for install, targeted lint/type checks, tests, and build.
+- Provision preview and production application environments.
+- Provision PostgreSQL for preview/production with backups.
+- Add structured logging with correlation IDs and sensitive-data redaction.
 
-#### Baseline observability
+### Demo fixture
 
-- Structured server logs with request/correlation IDs.
-- Error tracking for browser, server, and worker failures.
-- Basic uptime monitoring for health and readiness endpoints.
-- Redact authorization headers, API keys, message content, phone numbers, addresses, transcripts, and audio URLs from logs.
-
-### Deliverables
-
-- Hosting and database environments
-- CI/CD workflow
-- Environment schema and updated `.env.example`
-- Health/readiness endpoints
-- Deployment and rollback runbook
+- Organization: `Acme India`
+- Position: `Senior Backend Engineer`
+- Panel: one recruiter, one hiring manager, and one technical reviewer
+- Candidates: 10–20 synthetic CV-based profiles with varied evidence quality
 
 ### Acceptance criteria
 
-- A preview URL deploys automatically and loads the current Sorted UI.
-- Production database credentials exist only in the deployment secret store.
-- A failed build or test prevents deployment.
-- Health checks distinguish a running process from a database-ready application.
-- Rollback to the previous application release is documented and tested once.
+- The private preview deploys from the repository.
+- The UI contains no customer-support/workflow terminology from the old concept.
+- Health and readiness checks correctly report application and database state.
+- Candidate names and documents in fixtures are synthetic.
+- CI blocks a deployment when required checks fail.
 
 ---
 
-## Slice 1 — Sign in, workspace onboarding, and tenant isolation
+## Slice 1 — Organization, authentication, and hiring-panel access
 
 ### User outcome
 
-A business owner can sign in, create a workspace, enter basic business details, and see a private empty Sorted workspace that no other account can access.
+An organization administrator can sign in, create an organization, invite hiring-panel members, assign roles, and ensure candidates are private to that organization.
 
 ### Scope
 
-#### Domain and data
+#### Data
 
-- Add `users`, `workspaces`, `workspace_members`, and `business_profiles`.
-- Include `workspace_id` on every future business-domain table.
-- Define owner/member roles and a minimal authorization policy.
-- Add database constraints and indexes for workspace-scoped lookups.
+- Add `users`, `organizations`, `organization_members`, and `invitations`.
+- Add organization status, timezone, default locale, retention setting, and audit metadata.
+- Add role-based permissions for administrator, recruiter, hiring manager, and technical reviewer.
 
 #### Experience
 
-- Sign-in/sign-out flow.
-- First-run onboarding for business name, timezone, default language, service category, and approval preference.
-- Workspace-aware shell and settings.
-- Empty Dashboard, Inbox, and Workflows states with a clear next action.
+- Sign in, sign out, session expiry, and account recovery.
+- First-run organization setup.
+- Member invitation and role management.
+- Workspace switcher only if a user belongs to multiple organizations.
+- Empty states for Dashboard, Positions, Candidates, and Outreach.
 
-#### Server boundaries
+#### Authorization
 
-- Resolve the active user and workspace server-side.
-- Reject unauthenticated API/server-action access.
-- Require workspace ownership or membership for every domain query.
-- Never accept an unchecked `workspace_id` from the browser as authorization.
+- Resolve the current organization server-side.
+- Never authorize using an unchecked organization ID supplied by the browser.
+- Apply role checks to every server action and API route.
+- Record membership and role changes in the audit log.
 
 ### Acceptance criteria
 
-- A new user completes onboarding and lands in their own workspace.
-- Two test users cannot read or mutate each other’s data by changing URLs or request payloads.
-- Sign-out invalidates access to protected pages and APIs.
-- Workspace timezone and language persist after refresh.
-- Playwright covers sign in, onboarding, sign out, and cross-tenant denial.
+- A new administrator completes setup and invites all three panel roles.
+- Recruiters can manage candidates but cannot change organization security settings.
+- Technical reviewers cannot export the whole candidate database.
+- Two organizations cannot access one another’s candidates by manipulating identifiers.
+- Playwright verifies onboarding, invitation, role enforcement, and cross-tenant denial.
 
 ---
 
-## Slice 2 — Persistent multilingual Inbox with seeded conversations
+## Slice 2 — Create a position and approve its evaluation rubric
 
 ### User outcome
 
-The owner can open Inbox, browse persisted customer conversations, read messages, filter by operational status, and see the same data after refreshing or signing in elsewhere.
+A hiring manager can paste or upload a job description, review structured requirements generated by Sarvam-105B, refine the evaluation rubric, add Indian hiring constraints, and approve it for screening.
 
 ### Scope
 
-#### Domain and data
+#### Data
 
-- Add `customers`, `conversations`, `messages`, `conversation_intents`, `extracted_facts`, `suggested_actions`, and `notifications`.
-- Model language, direction, channel, delivery state, message timestamps, and optional media metadata.
-- Define statuses such as `needs_action`, `waiting_on_customer`, `ai_handled`, and `closed`.
-- Replace starter `items` data and routes with Sorted repositories/services.
-- Add deterministic demo seed data for Rahul, Priya, Ahmed, Sarah, and Meera.
+- Add `positions`, `job_descriptions`, `evaluation_rubrics`, `rubric_criteria`, and `hiring_panel_members`.
+- Version job descriptions and rubrics.
+- Store criterion type, weight, classification, evidence expectations, and display order.
+- Support criterion classifications: `must_have`, `preferred`, `logistics`, and `informational`.
+
+#### Sarvam-105B adapter
+
+- Define `JobDescriptionStructuringProvider`.
+- Keep the real client server-only and provide a deterministic fake provider for tests.
+- Validate structured model output with a versioned Zod schema.
+- Retain model, prompt version, request ID, latency, and normalized errors.
 
 #### Experience
 
-- Load conversation list and selected conversation from the server.
-- Persist filters and selected conversation in the URL where useful.
-- Implement empty, loading, pagination, and error states.
-- Mark conversations read and change operational status.
-- Derive Dashboard attention counts from the same persisted records.
+- Create position manually or from pasted/uploaded JD text.
+- Show extracted title, seniority, responsibilities, skills, experience, and logistics.
+- Let the manager convert requirements into rubric criteria.
+- Allow explicit weights while warning against overfitting.
+- Require human approval before screening begins.
+- Support a position without a complete JD through a manual rubric.
 
-#### Architecture
+#### India-specific fields
 
-- Introduce Sorted schemas, repositories, services, and fixture producers.
-- Keep fixtures behind the same service contracts as database implementations.
-- Use server components for initial reads; use client components only for interactive panes.
+- Employment type
+- Location and relocation
+- Remote/hybrid/on-site preference
+- Compensation range
+- Minimum and preferred experience
+- Notice-period preference
+- Shift or travel requirements
+- Work authorization where relevant
 
 ### Acceptance criteria
 
-- Seeded conversations survive refresh and appear consistently in Inbox and Dashboard.
-- Updating a conversation status changes Dashboard counts without editing fixtures.
-- All reads and writes are workspace-scoped.
-- Pagination/order is stable when messages share similar timestamps.
-- Integration tests run against PGlite and verify the repository SQL.
+- A backend-engineer JD becomes an editable structured rubric.
+- The manager can distinguish must-have, preferred, logistics, and informational criteria.
+- The AI cannot approve its own rubric.
+- Changing an approved rubric creates a new version rather than mutating prior evaluations.
+- A position can be saved as a draft without a JD.
 
 ---
 
-## Slice 3 — Saaras voice transcription inside a conversation
+## Slice 3 — Upload CVs and build persistent candidate records
 
 ### User outcome
 
-The owner can record or upload a multilingual voice message, submit it for transcription, review the Saaras transcript and detected language, correct it if necessary, and attach it to a conversation.
+A recruiter can import one or many candidates from CVs or other supported sources, see processing progress, resolve duplicate identities across sources, and obtain persistent candidate records in the organization’s talent pool.
 
 ### Scope
 
-#### Sarvam adapter
+#### Upload pipeline
 
-- Implement a server-only Sarvam client with timeout, retry, cancellation, and normalized errors.
-- Implement `SpeechToTextProvider` and a Saaras adapter.
-- Store Sarvam request IDs, model/version metadata, duration, status, and language—not credentials.
-- Add a fake provider for deterministic local and CI tests.
+- Support PDF and DOCX initially.
+- Validate file type, signature, size, page count, and malware-scan status.
+- Store source files privately using short-lived signed URLs.
+- Create asynchronous states: `uploaded`, `scanning`, `extracting`, `parsed`, `needs_review`, and `failed`.
+- Preserve original document metadata and a content checksum.
 
-#### Media pipeline
+#### Source-agnostic ingestion
 
-- Browser recording with explicit microphone permission.
-- File upload validation for MIME type, size, and duration.
-- Private object storage with short-lived signed URLs.
-- Transcription job states: `queued`, `processing`, `completed`, `failed`, and `cancelled`.
-- Retention policy for source audio and a user-visible delete action.
+- Define a shared `CandidateIngestionProvider` contract that produces normalized identity hints, profile facts, evidence claims, source metadata, and processing warnings.
+- Initial ingestion methods:
+  - PDF and DOCX CV upload
+  - Bulk CV upload
+  - CSV candidate import
+  - Recruiter-entered candidate profile
+  - GitHub profile or repository URL
+  - Personal portfolio or public profile URL
+  - LinkedIn URL stored as a reference
+  - Candidate-provided LinkedIn export or explicitly authorized LinkedIn integration
+  - Recruitment inbox/email attachment in a later iteration of this slice
+- Store every import as a separate immutable `candidate_source` linked to the canonical candidate.
+- Never treat imported claims as verified merely because they came from a public profile.
+- Respect robots, provider terms, rate limits, privacy expectations, and access controls.
+- Do not scrape LinkedIn pages. Support recruiter/candidate-provided exports or an authorized LinkedIn API/partner integration when available.
+- Use the official GitHub API for permitted public data and clearly distinguish self-authored repositories, contributions, forks, and organization-owned work.
+- Make adapters replaceable so future sources such as job boards, ATS exports, referral forms, or candidate application forms use the same normalization pipeline.
+
+#### Data
+
+- Add `candidates`, `candidate_sources`, `candidate_documents`, `candidate_identities`, `external_profile_links`, and `ingestion_runs`.
+- Normalize email and phone values for duplicate detection while protecting raw values.
+- Support candidates without an application.
+- Create `applications` only when import occurs inside a position or a recruiter assigns the candidate later.
+
+#### Duplicate detection
+
+- Exact match on organization-scoped normalized email.
+- Strong match on phone or external profile identity.
+- Suggested match on name plus employment/education evidence.
+- Human-reviewed merge with a reversible audit trail.
+- Generate organization-scoped identity fingerprints from normalized identifiers; do not use a global cross-customer candidate identity.
+- Combine deterministic and probabilistic signals:
+  - Exact normalized email
+  - Exact normalized phone number
+  - Same GitHub account ID or verified external account ID
+  - Same authorized LinkedIn member/source ID when available
+  - Same portfolio domain or strongly matching profile URL
+  - Name plus overlapping employer, role, education, and employment dates
+  - Document checksum for re-uploaded CVs
+- Classify results as `same_candidate`, `possible_duplicate`, or `distinct` with evidence and confidence.
+- Auto-link only high-confidence deterministic matches within the same organization; route probabilistic matches to human review.
+- Support merge preview, field-level conflict resolution, provenance preservation, and undo.
+- Support splitting an incorrectly merged candidate without losing applications, reviews, or audit history.
 
 #### Experience
 
-- Recording/upload controls in AI Inbox.
-- Progress and retry UI.
-- Transcript, language, confidence/metadata when available, and correction workflow.
-- Clear disclosure that audio is being processed by Sarvam.
+- Global drag-and-drop import.
+- Position-scoped import.
+- Batch progress and individual retry.
+- Failed-document explanation.
+- Potential-duplicate review before merge.
+- “Add source” action on an existing candidate to attach a CV, GitHub URL, portfolio, CSV record, or authorized LinkedIn data without creating another candidate.
+- Candidate source panel showing origin, import time, permission/retrieval method, processing status, and contributed evidence.
 
 ### Acceptance criteria
 
-- A Hindi/Hinglish sample can be recorded or uploaded and transcribed into a persisted message.
-- Refreshing during transcription restores the correct job state.
-- Invalid formats, oversized files, timeout, quota, and provider failure produce actionable errors.
-- Deleting retained audio removes access while preserving an allowed corrected transcript and audit record.
-- Automated tests use the fake provider; one protected smoke test validates the real sandbox integration.
+- Twenty synthetic CVs can be uploaded in one batch.
+- Refreshing during processing restores accurate progress.
+- The same CV cannot silently create repeated candidates.
+- Importing a CV and GitHub URL for the same person can enrich one canonical profile while retaining two sources.
+- A likely duplicate from different CV formats is surfaced with the signals that caused the match.
+- An incorrectly merged profile can be split safely.
+- A candidate uploaded without a position appears in the talent pool.
+- A candidate uploaded within a position receives exactly one application.
+- Source CVs are never publicly addressable.
 
 ---
 
-## Slice 4 — Sarvam-105B conversation understanding and draft response
+## Slice 4 — Candidate Evidence Profile
 
 ### User outcome
 
-From a customer conversation, the owner can ask Sorted to identify intent, known and missing facts, a recommended next action, and a multilingual draft response grounded in the conversation and business profile.
+The recruiter can review a structured career profile extracted from a CV, see the evidence behind each claim, correct errors, and identify missing information without altering the source document.
 
 ### Scope
 
-#### Reasoning contract
+#### Data
 
-- Define a versioned structured output schema for intents, facts, missing fields, suggested actions, draft response, language, confidence, and safety flags.
-- Implement `ConversationReasoningProvider` and a Sarvam-105B adapter.
-- Validate every model response with Zod; reject or repair invalid structured output safely.
-- Include only the minimum necessary conversation and business context.
-- Add prompt/model versioning and normalized token/latency/cost metadata where available.
+- Add employment, education, project, skill, certification, language, and external-link records.
+- Add `evidence_claims` and `evidence_sources`.
+- Record claim status: `explicit`, `inferred`, `externally_evidenced`, `contradicted`, or `unverified`.
+- Store source document, page/section, excerpt coordinates where possible, extractor version, and confidence.
+- Store human corrections separately from model extraction history.
+
+#### Sarvam-105B extraction
+
+- Define `CandidateProfileExtractionProvider`.
+- Extract into a versioned schema, never directly into UI state.
+- Separate factual extraction from evaluative conclusions.
+- Detect ambiguity rather than inventing dates, employers, or skill depth.
 
 #### Experience
 
-- Run/re-run understanding from AI Inbox.
-- Persist and show current analysis separately from previous versions.
-- Let the owner accept, edit, or reject a draft.
-- Never send a generated draft automatically in this slice.
-- Update Dashboard attention state based on persisted missing facts and suggestions.
+- Profile overview: experience, current role, primary skills, education, and logistics.
+- Evidence view with source references.
+- “Needs verification” section.
+- Correct, confirm, reject, and add-claim actions.
+- LinkedIn, GitHub, portfolio, CSV, email, and CV evidence shown with their distinct source provenance.
+- Candidate sources can be added or refreshed independently without overwriting confirmed human corrections.
+- GitHub evidence distinguishes repository ownership, contribution type, recency, and relevance; commit count is never treated as a quality score.
+- LinkedIn URLs are shown as references. Data is ingested only through candidate/recruiter-provided exports or authorized integrations—never page scraping.
 
-#### Safety
+#### India-specific candidate fields
 
-- Treat conversation text as untrusted input; prevent it from overriding system/tool policy.
-- Require approval for prices, promises, complaint resolutions, and outbound content.
-- Do not invent business facts; visibly mark unknown information.
-
-### Acceptance criteria
-
-- Rahul’s message produces quote and booking intents plus the expected missing fields.
-- Accepted/edited/rejected outcomes are persisted for future quality measurement.
-- Invalid provider output cannot reach the UI as trusted structured data.
-- Re-running analysis does not destroy the prior audit history.
-- Failure falls back to a manual reply path without blocking the conversation.
-
----
-
-## Slice 5 — Create and activate a real workflow from Inbox
-
-### User outcome
-
-The owner can turn Rahul’s suggested action into a persisted workflow, review its visual definition, test it against the conversation, and activate it.
-
-### Scope
-
-#### Domain and data
-
-- Add `workflows`, `workflow_versions`, `workflow_nodes`, `workflow_edges`, and `workflow_triggers`.
-- Define versioned node configuration schemas for trigger, reasoning, condition, draft, approval, voice, and send actions.
-- Store published versions immutably; edits create a new draft version.
-- Validate graph integrity: one trigger, reachable nodes, valid edges, no unsupported cycles, and valid node configuration.
-
-#### Composer
-
-- Move the existing composer to a reusable feature component.
-- Accept typed context from Inbox, Dashboard, or an existing workflow.
-- Use Sarvam-105B to propose a workflow definition from natural language, then validate it through the same graph schema.
-- Allow manual review and modification before saving.
-- Implement test mode that runs without customer-facing side effects.
+- Current location and preferred location
+- Current and expected CTC, with fixed/variable separation
+- Notice period, serving-notice status, and last working day
+- Offers in hand
+- Remote/hybrid preference
+- Willingness to relocate
+- Preferred communication language
 
 ### Acceptance criteria
 
-- “When quote details are missing, ask for them” becomes a valid persisted workflow.
-- The workflow can be tested with Rahul’s conversation and produces a previewed path and draft.
-- Activation creates an immutable published version.
-- Invalid or disconnected graphs cannot be activated.
-- The activated workflow appears in Workflows and on relevant Dashboard counts.
+- A CV produces a usable profile with employment, skills, projects, and source evidence.
+- Clicking an extracted claim reveals where it came from.
+- Human correction does not destroy the original extraction record.
+- Unknown information is visibly unknown rather than inferred as fact.
+- Protected attributes are not extracted into matching inputs.
+- Conflicting claims from CV, GitHub, LinkedIn-authorized data, or portfolio sources are displayed for review instead of silently choosing one.
 
 ---
 
-## Slice 6 — Durable execution, runs, logs, and human approval
+## Slice 5 — Evidence-backed position matching
 
 ### User outcome
 
-The owner can manually run an active workflow, watch persisted step progress, approve or reject its drafted response, recover from failures, and inspect understandable run history.
+For an approved position, the hiring panel can see each candidate’s criterion-by-criterion fit, evidence confidence, missing information, concerns, and an explainable review recommendation.
 
 ### Scope
 
-#### Execution data
+#### Evaluation model
 
-- Add `workflow_runs`, `workflow_run_steps`, `approvals`, `outbound_actions`, and `audit_events`.
-- Snapshot the workflow version and relevant inputs at run start.
-- Define state transitions and enforce them transactionally.
-- Assign an idempotency key to every trigger and external side effect.
+- Add `candidate_evaluations`, `criterion_evaluations`, and `evaluation_runs`.
+- Snapshot candidate evidence and rubric versions used by every evaluation.
+- Score job-relevant criteria only.
+- Produce separate `role_fit` and `evidence_confidence` values.
+- Recommendations: `strong_review`, `review`, `needs_information`, and `low_match`.
+- Never generate `auto_reject`.
 
-#### Worker
+#### Scoring principles
 
-- Implement registered tasks for starting/resuming runs and executing supported nodes.
-- Persist state before enqueueing the next step or invoking a side effect.
-- Add retry policy with exponential backoff, maximum attempts, and terminal failure.
-- Resume a run after approval without repeating completed actions.
-- Add recovery for abandoned locks and worker restarts.
+- Deterministic calculation combines approved criterion weights and normalized criterion judgments.
+- Sarvam-105B evaluates evidence against individual rubric criteria and returns structured reasoning.
+- Missing evidence lowers confidence, not necessarily capability.
+- Logistics appear separately from technical/role merit.
+- Education and employer prestige are not silent quality proxies.
+- Absence of public GitHub activity does not reduce core role-fit scores.
 
 #### Experience
 
-- Real-time or polling-based run progress.
-- Canvas path highlighting based on persisted steps.
-- Approval inbox with approve, edit-and-approve, and reject.
-- Runs and business-readable logs, with technical detail behind disclosure.
-- Retry/replay controls that explain their effects.
+- Position candidate table with filters and sortable dimensions.
+- Candidate scorecard with criterion, rating, evidence, gaps, and reviewer status.
+- Side-by-side comparison for a small candidate set.
+- Re-run evaluation when the rubric or evidence changes, while preserving history.
+- Manual override requires a reason and remains visible in the audit trail.
 
 ### Acceptance criteria
 
-- A run survives browser refresh and worker restart.
-- Approval pauses execution indefinitely without holding a database lock.
-- Approving once cannot send or execute an action twice.
-- Failed steps show a useful message and can be retried safely.
-- Inbox state, notification state, workflow run, and Dashboard counts remain consistent.
+- The demo position ranks candidates using the approved rubric.
+- Every rating links to candidate evidence or clearly says evidence is missing.
+- Role fit and evidence confidence are displayed separately.
+- Changing the rubric creates new evaluations without rewriting historical results.
+- The system cannot use age, gender, photograph, caste, religion, marital status, disability, or name-based demographic inference.
 
 ---
 
-## Slice 7 — Bulbul voice preview and approved voice response
+## Slice 6 — Panel review and shortlist consensus
 
 ### User outcome
 
-The owner can preview an approved response in the customer’s language using Bulbul, choose text or voice delivery, and confirm the exact content before sending.
+Recruiters, hiring managers, and technical reviewers can independently review candidates, discuss evidence, expose disagreement, and record a human shortlist decision.
 
 ### Scope
 
-#### Sarvam adapter
+#### Data
 
-- Implement `TextToSpeechProvider` and a Bulbul adapter.
-- Normalize voice, language, format, duration, request ID, and provider errors.
-- Cache generated previews by safe content hash and configuration where policy permits.
+- Add `panel_reviews`, `review_comments`, `review_assignments`, `shortlist_decisions`, and `decision_events`.
+- Review states: `not_started`, `in_review`, `submitted`, and `changes_requested`.
+- Reviewer recommendations: `shortlist`, `hold`, `needs_information`, and `do_not_advance`.
+- Keep the final shortlist decision distinct from AI and individual recommendations.
 
-#### Media and experience
+#### Experience
 
-- Voice/language selection with sensible defaults from the conversation.
-- Audio preview, regenerate, and delete controls.
-- Persist private generated media with expiry/retention rules.
-- Link generated audio to the approval and outbound action.
-- Prevent post-approval text mutation: changed text requires regeneration and reapproval.
+- Review queue for each panel member.
+- Structured review against relevant rubric criteria.
+- Evidence-linked comments and mentions.
+- Visible disagreement rather than averaged-away votes.
+- Hiring-manager final decision with required rationale when overriding consensus.
+- Bulk shortlist only after required reviews are complete.
+
+#### Notifications
+
+- Review assignment
+- Mention/comment
+- Evaluation updated after evidence correction
+- Decision required
+- Candidate shortlisted
 
 ### Acceptance criteria
 
-- An approved Hindi/Hinglish response produces playable Bulbul audio.
-- The owner can switch between text and voice before dispatch.
-- Changed draft text invalidates the previous audio and approval.
-- Bulbul failures preserve the approved text fallback.
-- Generated audio is private and inaccessible after expiry/deletion.
+- Each role sees only permitted candidate information and actions.
+- Technical reviewers can validate technical evidence without editing compensation data.
+- Conflicting reviews remain visible to the decision maker.
+- AI output never changes application stage by itself.
+- Every final shortlist decision records actor, rationale, evaluation version, and timestamp.
 
 ---
 
-## Slice 8 — First live customer channel
+## Slice 7 — Candidate information request and email outreach
 
 ### User outcome
 
-A real customer message enters Sorted, is processed into a conversation, triggers the quote workflow, pauses for approval, and receives exactly one approved text or voice response through the same channel.
-
-### Channel choice
-
-Select one channel for the first live slice. WhatsApp is the product-aligned default; a simpler web-chat or test channel may be used first if provider approval would threaten the hackathon deadline. Do not build multiple channels in parallel.
+A recruiter can send an approved, personalized email to a candidate requesting missing information or confirming shortlist interest, and candidate replies update the application workflow.
 
 ### Scope
 
-- Define `ChannelAdapter` for inbound verification/parsing, outbound text/media, delivery receipts, and normalized errors.
-- Add `channel_connections`, external identity mapping, inbound event records, and delivery attempts.
-- Verify webhook signatures before reading payloads.
-- Persist inbound events before processing and deduplicate by provider event ID.
-- Resolve customer identity safely and support unknown contacts.
-- Add connection/setup UI and a test-message flow.
-- Feed inbound events through the existing conversation and workflow services—not channel-specific UI state.
+#### Communication data
+
+- Add `outreach_threads`, `outreach_messages`, `message_templates`, `candidate_responses`, `delivery_events`, and `opt_outs`.
+- Link communication to candidate and optionally application/position.
+- Persist draft, approval, provider, delivery, bounce, reply, and failure states.
+- Use idempotency keys to prevent duplicate sends.
+
+#### Sarvam-105B drafting
+
+- Generate drafts using approved candidate, position, and missing-information context.
+- Validate generated content and prohibit unsupported claims or promises.
+- Show exactly which information will be requested.
+- Require recruiter editing/approval before sending.
+
+#### Email adapter
+
+- Define a provider-neutral `EmailProvider`.
+- Implement one provider plus a fake implementation for tests.
+- Support verified sender identity, delivery events, replies, bounce handling, and unsubscribe/opt-out.
+- Parse replies into suggestions; require human confirmation before updating sensitive structured fields.
+
+#### Experience
+
+- “Request missing information” from profile or evaluation.
+- “Confirm interest” from shortlist.
+- Draft editor, approval, send, delivery status, and reply timeline.
+- Candidate-facing privacy notice and communication preference.
 
 ### Acceptance criteria
 
-- A real inbound message appears once in the correct workspace and conversation.
-- Duplicate webhook deliveries do not duplicate messages or workflow runs.
-- The active workflow reaches human approval and sends exactly one approved response.
-- Delivery status updates the message timeline.
-- Invalid signatures and cross-workspace identifiers are rejected and audited.
+- A recruiter can request notice period and expected CTC from a shortlisted candidate.
+- Sending the same approved action twice cannot produce duplicate emails.
+- Candidate reply appears in the communication timeline.
+- Suggested structured updates require recruiter confirmation.
+- Bounce and opt-out stop further automated follow-up.
 
-### Hackathon release gate
+---
 
-At the end of this slice, Sorted has a complete live loop and is demo-ready:
+## Slice 8 — Follow-up sequences and pipeline handoff
+
+### User outcome
+
+Recruiters can configure safe follow-up nudges, see who needs attention, and move responsive shortlisted candidates into recruiter screening without building interview functionality.
+
+### Scope
+
+#### Outreach sequences
+
+- Add `outreach_sequences`, `outreach_steps`, and `sequence_enrollments`.
+- Initial sequence types: missing-information request and shortlist-interest confirmation.
+- Support delays, business hours, maximum attempts, stop conditions, and manual pause.
+- Require approved templates; no unconstrained autonomous messages.
+- Stop on reply, bounce, opt-out, manual disposition, or pipeline advancement.
+
+#### Pipeline
+
+- Stages: `talent_pool`, `applied`, `under_review`, `needs_information`, `shortlisted`, `contacted`, `interested`, `recruiter_screening`, `not_advancing`, and `withdrawn`.
+- Record every stage transition and actor.
+- Require a human action to enter `recruiter_screening` or `not_advancing`.
+- Add a future integration boundary for handing off to an ATS or interview product.
+
+#### Dashboard
+
+- Candidates awaiting review
+- Panel decisions pending
+- Outreach due today
+- Candidate replies
+- Missing information
+- Stalled applications
+
+### Acceptance criteria
+
+- An approved sequence sends reminders according to business-hour rules.
+- A candidate reply immediately stops future nudges.
+- Recruiters can pause all outreach for a candidate or position.
+- Advancing to recruiter screening records a complete evidence and decision snapshot.
+- No AI interview or scheduling behavior is introduced.
+
+### MVP release gate
+
+At the end of Slice 8, Sorted completes its core production loop:
 
 ```text
-Real multilingual message
-→ Saaras when audio
-→ Sarvam-105B understanding
-→ Workflow trigger
-→ Human approval
-→ Text or Bulbul voice response
-→ Delivered through the customer channel
+Approved position rubric
+→ Batch CV upload
+→ Evidence-backed candidate profiles
+→ Explainable role matching
+→ Panel-reviewed shortlist
+→ Approved candidate outreach
+→ Reply and missing information captured
+→ Human handoff to recruiter screening
 ```
 
 ---
 
-## Slice 9 — Dashboard truth, notifications, and operational control
+## Slice 9 — Saaras recruiter voice notes and multilingual accessibility
 
 ### User outcome
 
-The Dashboard accurately reflects live conversation and workflow state, proactively identifies workflow opportunities, and lets the owner act without searching through the Inbox.
+Hiring managers and recruiters can dictate position requirements or screening notes in an Indian language, review the Saaras transcript, and convert approved content into structured hiring data.
 
 ### Scope
 
-- Replace every remaining hardcoded count/chart with server-backed queries.
-- Define precise rules for needs attention, waiting on customer, active workflows, completed today, response time, and execution success.
-- Add actionable notifications for approval, failure, overdue response, and successful completion.
-- Add mark-read, dismiss, deep-link, and deduplication behavior.
-- Generate automation opportunities from auditable behavior signals, initially through deterministic rules; use AI only where it adds value.
-- Add workflow pause/resume and emergency-disable controls.
+- Define `SpeechToTextProvider` and implement Saaras server-side.
+- Browser audio recording with explicit permission.
+- Private media storage, upload validation, retention, and deletion.
+- Transcription states with retry and recovery.
+- Use cases:
+  - Dictate a position requirement
+  - Add recruiter screening notes
+  - Add panel feedback
+  - Record a candidate-provided voice response in a later iteration
+- Require transcript review before it changes a rubric, candidate profile, or decision.
+- Preserve language and transcript provenance.
 
 ### Acceptance criteria
 
-- Every summary card reconciles with its underlying records.
-- Clicking a metric opens the corresponding filtered records.
-- Notifications are not duplicated by retries or repeated events.
-- The unanswered-quote insight can create a prefilled workflow through the shared composer.
-- Pausing a workflow prevents new runs while preserving in-progress run state according to a documented policy.
+- A Hindi/Hinglish hiring-manager note becomes an editable transcript.
+- Approved transcript content can add a draft rubric criterion.
+- Refresh during transcription restores the correct state.
+- Source audio can be deleted according to retention policy.
+- Transcribed speech never becomes a hiring decision automatically.
 
 ---
 
-## Slice 10 — Security, privacy, reliability, and public launch readiness
+## Slice 10 — Bulbul candidate communication, opt-in only
 
 ### User outcome
 
-Customers can trust Sorted with business conversations, and operators can detect, diagnose, recover from, and communicate production incidents.
+Where appropriate, a recruiter can offer an accessible multilingual audio version of an approved candidate message, preview it, and send it only through an opt-in communication path.
 
-### Security and privacy
+### Scope
 
-- Threat-model authentication, workspace isolation, webhook ingestion, prompt injection, media handling, approvals, and outbound sends.
-- Add rate limits and abuse controls to login, uploads, model execution, workflow runs, and webhooks.
-- Encrypt traffic and managed storage; document encryption-at-rest guarantees.
-- Implement workspace export and deletion.
-- Define retention for messages, transcripts, audio, provider payloads, logs, and audit events.
-- Add secrets rotation and least-privilege service credentials.
-- Review third-party data processing and user disclosure requirements.
-
-### Reliability
-
-- Define service-level indicators for inbound processing, model success, workflow completion, approval latency, and delivery success.
-- Add dashboards and alerts for queue depth, stuck runs, provider errors, webhook failures, and database health.
-- Test database restore, worker recovery, provider outage fallback, and channel retry behavior.
-- Add dead-letter/reconciliation tooling for terminal events.
-- Add feature flags and provider kill switches.
-
-### Quality and launch
-
-- Full Playwright coverage of the three primary demo flows and the real-channel loop.
-- Accessibility audit for keyboard navigation, focus, labels, contrast, reduced motion, and screen-reader semantics.
-- Responsive testing across supported viewport sizes.
-- Load test inbound webhooks and workflow execution at expected launch volume.
-- Complete privacy notice, terms, support contact, incident runbook, and customer-facing status communication path.
-- Remove or gate inherited starter pages/routes such as Items and the technical Jobs dashboard.
+- Define `TextToSpeechProvider` and implement Bulbul server-side.
+- Support approved languages/voices and accessible playback.
+- Generate only from an already approved text message.
+- Changing the text invalidates audio and requires regeneration/reapproval.
+- Store generated audio privately with expiration and deletion controls.
+- Make voice optional at organization and candidate levels.
+- Do not use unsolicited AI voice calls or deceptive synthetic identity.
 
 ### Acceptance criteria
 
-- No critical/high findings remain from the launch security review.
-- Backup restoration and a provider-outage drill succeed.
-- Alerting detects a deliberately failed worker and stuck run.
-- Workspace deletion removes or irreversibly anonymizes data according to policy.
-- The full live loop passes in production using a designated test customer.
-- A release owner signs off on product, engineering, security/privacy, and operations checklists.
+- An approved message produces a playable multilingual preview.
+- Voice is never sent without a compatible channel and recorded preference/consent.
+- Failed generation preserves the text-only communication path.
+- Audio URLs expire and cannot be accessed across organizations.
+- Audit history links the approved text, voice configuration, generated asset, and sender.
 
 ---
 
-## Recommended milestone sequence
+## Slice 11 — Privacy, fairness, security, and launch readiness
 
-| Milestone | Slices | Demonstrable result |
+### User outcome
+
+Organizations can trust Sorted with candidate data and explain how candidates were screened, while operators can detect and recover from production failures.
+
+### Candidate privacy
+
+- Candidate-facing privacy notice describing source, purpose, retention, AI assistance, and contact path.
+- Data correction, export, deletion, and outreach opt-out workflows.
+- Organization-configurable retention with safe minimum/maximum policy.
+- Delete or irreversibly anonymize candidate data after an approved request, subject to documented legal retention needs.
+- Prevent raw CVs, phone numbers, compensation, and email content from entering logs.
+
+### Fairness and explainability
+
+- Document allowed and prohibited matching inputs.
+- Blind or suppress protected attributes in evaluation contexts.
+- Add evaluation-quality sampling and reviewer feedback.
+- Compare recommendation and advancement rates for unexpected disparities where legally and ethically appropriate.
+- Allow organizations to inspect rubric, evidence, scoring logic, model version, and human overrides.
+- Add a prominent statement that Sorted supports—not replaces—human hiring decisions.
+
+### Security
+
+- Threat-model authentication, tenant isolation, uploads, document parsing, prompt injection, external links, email, and data export.
+- Malware scanning and content-type verification for uploaded CVs.
+- Rate limits for uploads, AI evaluation, invitations, exports, and email.
+- Least-privilege credentials and secret rotation.
+- Dependency and static security scanning in CI.
+- Signed URLs and strict access checks for all candidate documents.
+
+### Reliability and operations
+
+- Metrics for upload success, extraction success, evaluation latency, queue depth, stuck jobs, outreach delivery, and reply ingestion.
+- Alerts for provider failures, database health, worker failure, email bounce spikes, and cross-tenant authorization failures.
+- Idempotent job execution, dead-letter handling, and reconciliation tools.
+- Backup restore drill and worker-restart drill.
+- Sarvam and email provider kill switches.
+- Incident, rollback, data-breach, and candidate-request runbooks.
+
+### Quality
+
+- Full Playwright coverage of the MVP release loop.
+- Accessibility audit for keyboard navigation, focus, forms, drag/drop alternatives, contrast, and screen readers.
+- Cross-browser and responsive testing.
+- Load testing for concurrent batch uploads and evaluation jobs.
+- Production test using synthetic candidates only.
+
+### Acceptance criteria
+
+- No critical or high security findings remain.
+- Cross-organization document and candidate access tests pass.
+- A candidate data request can be completed and audited.
+- Every recommendation can be reconstructed from rubric version, evidence snapshot, model version, and human actions.
+- Backup restore and worker recovery drills succeed.
+- The complete MVP loop passes in production with synthetic candidates.
+
+---
+
+## 6. Recommended milestones
+
+| Milestone | Slices | Demonstrable outcome |
 |---|---:|---|
-| Private hosted preview | 0–2 | A signed-in owner sees persistent, isolated conversations and accurate Dashboard counts. |
-| Sarvam intelligence demo | 3–4 | Voice becomes a transcript, and a conversation becomes structured understanding plus a safe draft. |
-| Real workflow demo | 5–7 | A suggested workflow is created, executed durably, approved, and previewed with Bulbul voice. |
-| Hackathon live loop | 8 | One real customer channel completes the multilingual message-to-response journey. |
-| Launch candidate | 9–10 | Dashboard truth, operational controls, security, reliability, and compliance are ready for external users. |
+| Recruitment prototype | 0 | The current app is coherently reframed around positions, candidates, evidence, and outreach. |
+| Private multi-user workspace | 1–2 | A hiring panel signs in, creates a position, and approves its rubric. |
+| Candidate intelligence | 3–4 | Recruiters batch-upload CVs and receive corrected, evidence-backed profiles. |
+| Explainable shortlist | 5–6 | The panel evaluates, discusses, and shortlists candidates with full evidence and human accountability. |
+| Production MVP | 7–8 | Shortlisted candidates receive approved outreach and move into recruiter screening. |
+| Sarvam accessibility layer | 9–10 | Recruiters use multilingual voice input and candidates can receive optional voice communication. |
+| External launch candidate | 11 | Privacy, fairness, security, reliability, and operations are production-ready. |
 
-## Scope discipline
+## 7. Suggested implementation structure
 
-Defer these until the first live loop is reliable:
+```text
+src/
+  app/
+    (auth)/
+    (workspace)/
+      [organization]/
+        dashboard/
+        positions/
+        positions/[positionId]/
+        candidates/
+        candidates/[candidateId]/
+        outreach/
+        settings/
+    api/
+      health/
+      ready/
+      webhooks/
+  features/
+    organizations/
+    positions/
+    candidates/
+    documents/
+    ingestion/
+    identity-resolution/
+    evidence/
+    evaluations/
+    panel-reviews/
+    outreach/
+    audit/
+  lib/
+    db.ts
+    auth/
+    queue/
+    storage/
+    providers/
+      sarvam/
+      github/
+      candidate-sources/
+      email/
+  workers/
+    tasks/
+```
 
-- Multiple customer channels
-- A general-purpose drag-and-drop automation platform
-- Full customer CRM
-- Knowledge-base authoring suite
-- Advanced BI/analytics
-- Autonomous outbound sending by default
-- Marketplace/templates ecosystem
-- Multiple AI providers in the UI
-- Native mobile applications
+Each feature should prefer:
 
-## Suggested environment configuration
+```text
+schema → repository → service → server action/route → UI
+```
 
-Names must be verified against the selected Sarvam SDK/API before implementation; do not guess production endpoints or model identifiers.
+External services should follow:
+
+```text
+provider interface → fake adapter → real adapter → normalized domain result
+```
+
+## 8. Candidate matching design
+
+### Example scorecard
+
+| Dimension | Weight | Candidate result | Evidence confidence |
+|---|---:|---:|---:|
+| Must-have technical skills | 35% | 88 | 82 |
+| Relevant experience | 25% | 80 | 90 |
+| Project complexity | 15% | 76 | 68 |
+| Domain alignment | 10% | 92 | 87 |
+| Preferred skills | 10% | 64 | 60 |
+| Communication evidence | 5% | Unknown | 0 |
+
+Logistics such as notice period and compensation should appear beside this score, not silently distort technical merit.
+
+### Evaluation output
+
+```text
+Role fit: 83/100
+Evidence confidence: 78/100
+Recommendation: Strong review
+
+Strong evidence
+- Designed production event-driven payment services
+- Demonstrated PostgreSQL performance work
+
+Needs verification
+- Kafka appears in the CV but lacks project evidence
+- Notice period is missing
+
+Human decision
+- Awaiting technical reviewer
+```
+
+## 9. Initial dashboard specification
+
+### Summary cards
+
+- Candidates to review
+- Awaiting panel decision
+- Outreach due today
+- Candidate replies
+
+### Main areas
+
+- Positions needing attention
+- Recently imported candidate batches
+- Review assignments
+- Missing-information requests
+- Stalled applications
+- Recent panel and outreach activity
+
+Every dashboard number must link to the filtered underlying records and reconcile with database state.
+
+## 10. Suggested environment variables
+
+Exact provider-specific names and endpoints must be verified against current official documentation before implementation.
 
 ```dotenv
-# Database
-DATABASE_URL=
-
-# Application/auth
+# Application
 APP_URL=
 AUTH_SECRET=
 
-# Sarvam (server-only)
+# Database
+DATABASE_URL=
+
+# Sarvam — server only
 SARVAM_API_KEY=
 
-# Private media storage
+# Private candidate document storage
 OBJECT_STORAGE_BUCKET=
 OBJECT_STORAGE_REGION=
 OBJECT_STORAGE_ACCESS_KEY_ID=
 OBJECT_STORAGE_SECRET_ACCESS_KEY=
 
-# First customer channel
-CHANNEL_WEBHOOK_SECRET=
-CHANNEL_ACCESS_TOKEN=
+# Email
+EMAIL_PROVIDER_API_KEY=
+EMAIL_FROM_ADDRESS=
+EMAIL_WEBHOOK_SECRET=
 
 # Observability
 ERROR_TRACKING_DSN=
 ```
 
-## Final go-live checklist
+## 11. Final MVP release checklist
 
-- [ ] Production environment and database are provisioned and backed up.
-- [ ] Authentication and workspace isolation are verified.
-- [ ] No demo fixtures appear in real customer workspaces.
-- [ ] Saaras, Sarvam-105B, and Bulbul adapters pass sandbox and production smoke tests.
-- [ ] One customer channel passes webhook, deduplication, delivery, and retry tests.
-- [ ] Workflow execution is durable, idempotent, resumable, and auditable.
-- [ ] Human approval is enforced for configured customer-facing actions.
-- [ ] Customer media and transcripts follow the documented retention policy.
-- [ ] Monitoring, alerts, kill switches, backup restoration, and incident runbooks are tested.
-- [ ] Accessibility and responsive checks pass.
-- [ ] CI, production build, integration tests, and Playwright tests pass.
-- [ ] Privacy, terms, support, and deletion/export paths are available.
-- [ ] A production test customer completes the full live loop successfully.
+- [ ] Authentication and organization isolation pass adversarial tests.
+- [ ] Hiring managers can approve versioned evaluation rubrics.
+- [ ] Recruiters can batch-upload CVs with retry and duplicate handling.
+- [ ] Recruiters can ingest candidates from CV, CSV, GitHub, portfolio, and authorized/candidate-provided profile data through one normalized pipeline.
+- [ ] Candidate sources remain independently traceable and refreshable.
+- [ ] Deterministic duplicates link safely; uncertain duplicates require human review.
+- [ ] Candidate merge, undo, and split preserve applications, evidence provenance, reviews, and audit history.
+- [ ] Candidate Evidence Profiles retain source provenance and corrections.
+- [ ] Matching separates role fit from evidence confidence.
+- [ ] Protected attributes cannot influence matching.
+- [ ] Panel members can review, disagree, comment, and record a human shortlist decision.
+- [ ] Approved email outreach sends exactly once and records delivery state.
+- [ ] Candidate replies stop follow-ups and can update missing information after confirmation.
+- [ ] Responsive Dashboard metrics reconcile with underlying applications.
+- [ ] Candidate correction, export, deletion, retention, and opt-out paths work.
+- [ ] CVs and candidate data never appear in logs or public storage.
+- [ ] Queue retries and worker restarts do not duplicate evaluations or messages.
+- [ ] CI, integration tests, Playwright tests, accessibility checks, and production build pass.
+- [ ] A full synthetic production run completes from JD creation through recruiter-screening handoff.
+
+## 12. Future roadmap after MVP
+
+Only after the screening and handoff loop is reliable:
+
+1. ATS integrations and bidirectional stage synchronization
+2. Interview scheduling
+3. Structured interview kits and panel scorecards
+4. Candidate self-service portal
+5. Approved GitHub enrichment using public/authorized data
+6. Agency client workspaces and submissions
+7. Talent rediscovery across historical candidates
+8. Interview transcription and structured notes with explicit consent
+9. AI-assisted interviews, only after a separate fairness, consent, and product review
+10. Offer and onboarding integrations
+
+AI interviewing is deliberately a separate future product decision, not an unfinished part of this MVP.
