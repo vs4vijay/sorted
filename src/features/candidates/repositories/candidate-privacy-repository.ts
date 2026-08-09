@@ -1,5 +1,6 @@
 import { executeQuery } from "@/lib/db";
-import type { CandidatePrivacyDecisionInput, CandidatePrivacyRequestInput } from "../schemas/privacy";
+import { createHash, randomBytes } from "node:crypto";
+import type { CandidatePrivacyDecisionInput, CandidatePrivacyRequestInput, HostedCandidatePrivacyRequestInput } from "../schemas/privacy";
 
 type Query = (sql: string, params?: unknown[]) => Promise<unknown[]>;
 
@@ -15,6 +16,36 @@ export class CandidatePrivacyRepository {
     const rows = await this.query(`WITH candidate AS (SELECT id FROM candidates WHERE organization_id=$1 AND id=$2 AND profile_status<>'anonymized'), created AS (INSERT INTO candidate_privacy_requests(id,organization_id,candidate_id,request_type,status,details,requested_by_id) SELECT $3,$1,id,$4,'requested',$5,$6 FROM candidate RETURNING id) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) SELECT $7,$1,$6,'candidate_privacy.requested','candidate_privacy_request',$3,json_build_object('candidate_id',$2::TEXT,'request_type',$4::TEXT) FROM created RETURNING subject_id`, [org, input.candidateId, id, input.requestType, input.details, actor, crypto.randomUUID()]);
     if (!rows[0]) throw new Error("Candidate not found in this organization.");
     return id;
+  }
+
+  async createHostedAccess(org: string, actor: string, candidateId: string) {
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const rows = await this.query(`WITH candidate AS (SELECT id FROM candidates WHERE organization_id=$1 AND id=$2 AND profile_status<>'anonymized'), created AS (INSERT INTO candidate_privacy_access_tokens(id,organization_id,candidate_id,token_hash,expires_at,created_by_id) SELECT $3,$1,id,$4,CURRENT_TIMESTAMP+INTERVAL '30 days',$5 FROM candidate RETURNING id) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) SELECT $6,$1,$5,'candidate_privacy.access_created','candidate_privacy_access',id,json_build_object('candidate_id',$2::TEXT,'expires_in_days',30) FROM created RETURNING subject_id`, [org,candidateId,crypto.randomUUID(),tokenHash,actor,crypto.randomUUID()]);
+    if (!rows[0]) throw new Error("Candidate not found in this organization.");
+    return token;
+  }
+
+  async resolveHostedAccess(token: string) {
+    const tokenHash=createHash("sha256").update(token).digest("hex");
+    const rows=await this.query(`SELECT a.organization_id,a.candidate_id,a.expires_at,c.display_name,o.name AS organization_name,EXISTS(SELECT 1 FROM opt_outs x WHERE x.organization_id=a.organization_id AND x.candidate_id=a.candidate_id AND x.channel='email') AS email_opted_out FROM candidate_privacy_access_tokens a JOIN candidates c ON c.id=a.candidate_id AND c.organization_id=a.organization_id JOIN organizations o ON o.id=a.organization_id WHERE a.token_hash=$1 AND a.revoked_at IS NULL AND a.expires_at>CURRENT_TIMESTAMP AND c.profile_status<>'anonymized' LIMIT 1`,[tokenHash]) as Record<string,unknown>[];
+    return rows[0]??null;
+  }
+
+  async submitHostedRequest(token:string,input:HostedCandidatePrivacyRequestInput){
+    const tokenHash=createHash("sha256").update(token).digest("hex");
+    const access=await this.resolveHostedAccess(token);
+    if(!access)throw new Error("This privacy link is invalid or has expired.");
+    const org=String(access.organization_id),candidateId=String(access.candidate_id);
+    if(input.requestType){
+      const requestId=crypto.randomUUID();
+      await this.query(`WITH created AS (INSERT INTO candidate_privacy_requests(id,organization_id,candidate_id,request_type,status,details,requested_by_id,request_source) VALUES($1,$2,$3,$4,'requested',$5,NULL,'hosted_candidate_portal') RETURNING id) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) SELECT $6,$2,NULL,'candidate_privacy.requested','candidate_privacy_request',id,json_build_object('candidate_id',$3::TEXT,'request_type',$4::TEXT,'source','hosted_candidate_portal') FROM created`,[requestId,org,candidateId,input.requestType,input.details,crypto.randomUUID()]);
+    }
+    if(input.optOutEmail){
+      await this.query(`WITH opted_out AS (INSERT INTO opt_outs(id,organization_id,candidate_id,channel,reason) VALUES($1,$2,$3,'email',$4) ON CONFLICT(organization_id,candidate_id,channel) DO UPDATE SET reason=EXCLUDED.reason RETURNING id), stopped AS (UPDATE sequence_enrollments e SET status='stopped',stop_reason='candidate_opt_out',stopped_at=COALESCE(e.stopped_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP FROM outreach_threads t WHERE e.organization_id=$2 AND e.thread_id=t.id AND t.organization_id=$2 AND t.candidate_id=$3 AND e.status IN('scheduled','active')), threads AS (UPDATE outreach_threads SET status='opted_out',updated_at=CURRENT_TIMESTAMP WHERE organization_id=$2 AND candidate_id=$3 AND status NOT IN('replied','bounced','opted_out')) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) SELECT $5,$2,NULL,'candidate_outreach.opted_out','candidate', $3,json_build_object('channel','email','source','hosted_candidate_portal') FROM opted_out`,[crypto.randomUUID(),org,candidateId,input.details,crypto.randomUUID()]);
+    }
+    await this.query(`UPDATE candidate_privacy_access_tokens SET last_used_at=CURRENT_TIMESTAMP WHERE token_hash=$1`,[tokenHash]);
+    return {requestRecorded:Boolean(input.requestType),emailOptedOut:input.optOutEmail};
   }
 
   async decide(org: string, actor: string, input: CandidatePrivacyDecisionInput) {
