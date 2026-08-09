@@ -51,6 +51,7 @@ export const RevokeInvitationInputSchema = z.object({ invitationId: z.string().u
 export const AcceptInvitationInputSchema = z.object({
   token: z.string().min(32).max(256),
   name: z.string().trim().min(2).max(100),
+  password: z.string().min(12).max(128).regex(/[A-Za-z]/, 'Add at least one letter.').regex(/[0-9]/, 'Add at least one number.'),
 });
 
 export const InvitationAcceptanceViewSchema = z.object({
@@ -84,7 +85,14 @@ export const FirstRunSetupInputSchema = z.object({
   organizationSlug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   timezone: z.string().min(1).default('Asia/Kolkata'),
   defaultLocale: z.string().min(2).max(20).default('en-IN'),
+  password: z.string().min(12).max(128).regex(/[A-Za-z]/, 'Add at least one letter.').regex(/[0-9]/, 'Add at least one number.'),
 });
+
+export const SignInInputSchema = z.object({
+  email: z.string().trim().toLowerCase().pipe(z.email()),
+  password: z.string().min(1).max(128),
+});
+
 
 export type OrganizationRole = z.infer<typeof OrganizationRoleSchema>;
 export type OrganizationMemberView = z.infer<typeof OrganizationMemberViewSchema>;

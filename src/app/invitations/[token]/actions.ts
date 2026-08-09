@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { OrganizationAccessRepository } from '@/features/organizations/repositories/organization-access-repository';
 import { AcceptInvitationInputSchema } from '@/features/organizations/schemas/access';
 import { hashSessionToken, ORGANIZATION_COOKIE_NAME, SESSION_COOKIE_NAME } from '@/lib/auth/session';
+import { hashPassword } from '@/lib/auth/password';
 
 export type AcceptInvitationState = { message?: string; errors?: Record<string, string[]> };
 
@@ -17,6 +18,7 @@ export async function acceptInvitation(_: AcceptInvitationState, formData: FormD
   const sessionExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
   const accepted = await new OrganizationAccessRepository().acceptInvitation({
     tokenHash: hashSessionToken(parsed.data.token), name: parsed.data.name, userId: randomUUID(),
+    passwordHash: await hashPassword(parsed.data.password),
     membershipId: randomUUID(), sessionId: randomUUID(), sessionTokenHash: hashSessionToken(sessionToken),
     sessionExpiresAt, auditEventId: randomUUID(),
   });

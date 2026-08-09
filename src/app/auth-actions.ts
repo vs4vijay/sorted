@@ -8,5 +8,5 @@ export async function signOut(): Promise<void> {
   if (access) await new OrganizationAccessRepository().revokeSession(access.sessionId);
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE_NAME); cookieStore.delete(ORGANIZATION_COOKIE_NAME);
-  redirect('/setup');
+  redirect('/sign-in');
 }

@@ -90,7 +90,7 @@ describe('OrganizationAccessRepository', () => {
     const repository = new OrganizationAccessRepository(async (sql, params) => {
       capturedSql = sql; capturedParams = params ?? []; return [{ organization_slug: 'acme-india' }];
     });
-    const accepted = await repository.acceptInvitation({ tokenHash: 'token-hash', name: 'Ravi Reviewer', userId: 'user-2',
+    const accepted = await repository.acceptInvitation({ tokenHash: 'token-hash', name: 'Ravi Reviewer', passwordHash: 'argon-hash', userId: 'user-2',
       membershipId: 'member-2', sessionId: 'session-2', sessionTokenHash: 'session-hash',
       sessionExpiresAt: new Date('2026-08-23'), auditEventId: 'audit-2' });
     expect(accepted).toEqual({ organizationSlug: 'acme-india' });

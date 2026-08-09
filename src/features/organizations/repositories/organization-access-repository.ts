@@ -91,14 +91,14 @@ export class OrganizationAccessRepository {
     });
   }
 
-  async createFirstOrganization(input: { userId: string; name: string; email: string; organizationId: string; organizationName: string; organizationSlug: string; membershipId: string; auditEventId: string; timezone: string; defaultLocale: string }): Promise<void> {
+  async createFirstOrganization(input: { userId: string; name: string; email: string; passwordHash: string; organizationId: string; organizationName: string; organizationSlug: string; membershipId: string; auditEventId: string; timezone: string; defaultLocale: string }): Promise<void> {
     await this.query(
-      `WITH created_user AS (INSERT INTO users (id, email, name) VALUES ($1, $2, $3) RETURNING id),
+      `WITH created_user AS (INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $11) RETURNING id),
       created_organization AS (INSERT INTO organizations (id, name, slug, timezone, default_locale) SELECT $4, $5, $6, $7, $8 FROM created_user RETURNING id),
       created_membership AS (INSERT INTO organization_members (id, organization_id, user_id, role) SELECT $9, created_organization.id, created_user.id, 'admin' FROM created_organization CROSS JOIN created_user RETURNING id)
       INSERT INTO audit_events (id, organization_id, actor_user_id, action, subject_type, subject_id, metadata)
       SELECT $10, $4, $1, 'organization.created', 'organization', $4, json_build_object('role', 'admin') FROM created_membership`,
-      [input.userId, input.email, input.name, input.organizationId, input.organizationName, input.organizationSlug, input.timezone, input.defaultLocale, input.membershipId, input.auditEventId],
+      [input.userId, input.email, input.name, input.organizationId, input.organizationName, input.organizationSlug, input.timezone, input.defaultLocale, input.membershipId, input.auditEventId, input.passwordHash],
     );
   }
 
@@ -198,7 +198,7 @@ export class OrganizationAccessRepository {
       role: row.role, status: row.status, expiresAt: row.expires_at });
   }
 
-  async acceptInvitation(input: { tokenHash: string; name: string; userId: string; membershipId: string; sessionId: string; sessionTokenHash: string; sessionExpiresAt: Date; auditEventId: string }): Promise<{ organizationSlug: string } | null> {
+  async acceptInvitation(input: { tokenHash: string; name: string; passwordHash: string; userId: string; membershipId: string; sessionId: string; sessionTokenHash: string; sessionExpiresAt: Date; auditEventId: string }): Promise<{ organizationSlug: string } | null> {
     const rows = await this.query(
       `WITH eligible AS (
         SELECT invitations.id, invitations.organization_id, invitations.email, invitations.role, organizations.slug
@@ -206,8 +206,9 @@ export class OrganizationAccessRepository {
         WHERE invitations.token_hash = $1 AND invitations.status = 'pending'
           AND invitations.expires_at > CURRENT_TIMESTAMP AND organizations.status = 'active' FOR UPDATE OF invitations
       ), ensured_user AS (
-        INSERT INTO users (id, email, name) SELECT $2, LOWER(email), $3 FROM eligible
-        ON CONFLICT (email) DO UPDATE SET name = CASE WHEN users.name = '' THEN EXCLUDED.name ELSE users.name END RETURNING id
+        INSERT INTO users (id, email, name, password_hash) SELECT $2, LOWER(email), $3, $9 FROM eligible
+        ON CONFLICT (email) DO UPDATE SET name = CASE WHEN users.name = '' THEN EXCLUDED.name ELSE users.name END,
+          password_hash = COALESCE(users.password_hash, EXCLUDED.password_hash) RETURNING id
       ), created_membership AS (
         INSERT INTO organization_members (id, organization_id, user_id, role)
         SELECT $4, eligible.organization_id, ensured_user.id, eligible.role FROM eligible CROSS JOIN ensured_user
@@ -225,7 +226,7 @@ export class OrganizationAccessRepository {
         FROM accepted CROSS JOIN ensured_user WHERE EXISTS (SELECT 1 FROM created_session)
       ) SELECT eligible.slug AS organization_slug FROM eligible
       WHERE EXISTS (SELECT 1 FROM accepted) AND EXISTS (SELECT 1 FROM created_session)`,
-      [input.tokenHash, input.userId, input.name, input.membershipId, input.sessionId, input.sessionTokenHash, input.sessionExpiresAt, input.auditEventId],
+      [input.tokenHash, input.userId, input.name, input.membershipId, input.sessionId, input.sessionTokenHash, input.sessionExpiresAt, input.auditEventId, input.passwordHash],
     ) as { organization_slug: string }[];
     return rows[0] ? { organizationSlug: rows[0].organization_slug } : null;
   }

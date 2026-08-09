@@ -24,6 +24,6 @@ describe('organization access contracts', () => {
 
   test('validates invitation mutation inputs', () => {
     expect(RevokeInvitationInputSchema.safeParse({ invitationId: 'not-an-id' }).success).toBe(false);
-    expect(AcceptInvitationInputSchema.parse({ token: 'a'.repeat(43), name: ' Ravi Reviewer ' }).name).toBe('Ravi Reviewer');
+    expect(AcceptInvitationInputSchema.parse({ token: 'a'.repeat(43), name: ' Ravi Reviewer ', password: 'reviewer-pass-12' }).name).toBe('Ravi Reviewer');
   });
 });

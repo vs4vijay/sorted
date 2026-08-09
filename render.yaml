@@ -7,13 +7,14 @@ services:
   # Web app — Next.js production server
   - type: web
     name: sorted-web
+    branch: main # Render defaults to master when unset; this repo's default is main
     runtime: node
     plan: free # Free tier spins down after 15 min idle; upgrade to starter/standard for always-on
     region: oregon
     buildCommand: bun install --frozen-lockfile && bun run db:generate && bun run build
     preDeployCommand: bun run db:deploy # prisma migrate deploy — idempotent, advisory-locked
     startCommand: bun run start # next start, listens on $PORT (defaults to 7070 locally)
-    healthCheckPath: /api/health
+    healthCheckPath: /api/ready # 503 while the database is unreachable — Render restarts instead of serving a broken instance
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -25,6 +26,9 @@ services:
         value: production
       - key: LOG_LEVEL
         value: info
+      # Set after first deploy: absolute origin for links/redirects (e.g. https://sorted-web.onrender.com).
+      # - key: APP_URL
+      #   sync: false
       # Set when a Sarvam-backed slice ships (server-only; never NEXT_PUBLIC_):
       # - key: SARVAM_API_KEY
       #   sync: false
@@ -32,6 +36,7 @@ services:
   # Background worker — drains the Postgres job queue (LISTEN/NOTIFY + poll fallback)
   - type: worker
     name: sorted-worker
+    branch: main
     runtime: node
     plan: free
     region: oregon

@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation';
 
 export default async function DashboardPage() {
   const access = await getCurrentAccess();
-  if (!access) redirect('/setup');
+  if (!access) redirect('/sign-in');
   const [positions, candidates] = await Promise.all([recruitingService.listPositions(), recruitingService.listCandidates()]);
   const reviewed = candidates.filter((candidate) => candidate.stage === 'under_review');
   return <AppShell active="dashboard">
