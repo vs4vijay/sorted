@@ -1,0 +1,46 @@
+import { z } from 'zod';
+
+export const OrganizationRoleSchema = z.enum([
+  'admin',
+  'recruiter',
+  'hiring_manager',
+  'technical_reviewer',
+]);
+
+export const OrganizationStatusSchema = z.enum(['active', 'suspended', 'archived']);
+export const InvitationStatusSchema = z.enum(['pending', 'accepted', 'revoked', 'expired']);
+
+export const OrganizationSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(2).max(120),
+  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  status: OrganizationStatusSchema,
+  timezone: z.string().min(1),
+  defaultLocale: z.string().min(2).max(20),
+  retentionDays: z.number().int().min(30).max(3650),
+});
+
+export const OrganizationMemberSchema = z.object({
+  id: z.string().min(1),
+  organizationId: z.string().min(1),
+  userId: z.string().min(1),
+  role: OrganizationRoleSchema,
+});
+
+export const CreateInvitationInputSchema = z.object({
+  email: z.string().trim().toLowerCase().pipe(z.email()),
+  role: OrganizationRoleSchema,
+});
+
+export type OrganizationRole = z.infer<typeof OrganizationRoleSchema>;
+
+export const rolePermissions = {
+  admin: ['organization:manage', 'members:manage', 'candidates:manage', 'candidates:export', 'positions:manage', 'reviews:submit'],
+  recruiter: ['candidates:manage', 'candidates:export', 'positions:manage', 'reviews:submit'],
+  hiring_manager: ['positions:manage', 'rubrics:approve', 'reviews:submit', 'shortlist:decide'],
+  technical_reviewer: ['reviews:submit'],
+} as const satisfies Record<OrganizationRole, readonly string[]>;
+
+export function roleCan(role: OrganizationRole, permission: string): boolean {
+  return (rolePermissions[role] as readonly string[]).includes(permission);
+}

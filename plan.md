@@ -194,6 +194,24 @@ Every vertical slice must include:
 
 # Vertical slices
 
+## Delivery progress tracker
+
+Last updated: 2026-08-09
+
+| Slice | Status | Evidence and remaining work |
+|---|---|---|
+| 0 — Reframe and foundations | Local implementation complete; external infrastructure pending | Recruiting shell, synthetic fixtures, environment validation, health/readiness routes, redacted structured logging, and CI are implemented. `bun run lint` passes with 6 pre-existing warnings and `bun run build` passes. Playwright CLI verified Dashboard and Positions in Chrome with no console errors; captures: `.images/slice-0-dashboard-verified-2026-08-09.png` and `.images/slice-0-positions-verified-2026-08-09.png`. Private preview deployment, managed PostgreSQL, and backup verification still require deployment-environment access. |
+| 1 — Organization and access | In progress | Added Zod access contracts, explicit role permissions, and schema foundations for users, organizations, memberships, invitations, sessions, and append-oriented audit events in both Prisma and PGlite. PGlite initialization, 3 domain tests, lint (0 errors; 6 pre-existing warnings), and production build pass. Next pickup: implement the organization-scoped repository and server-side session/organization resolver, then onboarding and invitation UI. |
+| 2 — Position and rubric | Not started | Begin only after Slice 1 server-side organization resolution and authorization are in place. |
+| 3–11 | Not started | Follow the slice order below. |
+
+### Current handoff
+
+- Continue Slice 1 with an organization-scoped repository and server-side session/organization resolver. Every repository query must take its organization from the resolved membership, not an unchecked browser-supplied identifier.
+- Preserve the existing Slice 0 fixture UI while replacing fixture-only organization access incrementally with organization-scoped services.
+- Use only a rotated `SARVAM_API_KEY` supplied through the server environment. The key is not required until Slice 2; retain deterministic fake providers and label their output simulated.
+- Do not mark Slice 0 fully complete until preview deployment, production PostgreSQL, and backup behavior have been verified in the target hosting environment.
+
 ## Slice 0 — Reframe the prototype and establish delivery foundations
 
 ### User outcome
