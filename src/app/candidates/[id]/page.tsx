@@ -2,9 +2,9 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AppShell, CandidateAvatar } from "@/components/recruiting/app-shell";
 import { requireCurrentAccess } from "@/lib/auth/session";
-import { CandidateIngestionRepository } from "@/features/candidates/repositories/candidate-ingestion-repository";
-import { privateDocumentStorage } from "@/features/candidates/services/private-document-storage";
-import { addExternalSource } from "../actions";
+import { EvidenceProfileRepository } from "@/features/candidates/repositories/evidence-profile-repository";
+import { addEvidenceClaim, reviewEvidenceClaim } from "../actions";
+const title = (value: unknown) => String(value ?? "").replaceAll("_", " ");
 export default async function CandidatePage({
   params,
 }: {
@@ -12,13 +12,26 @@ export default async function CandidatePage({
 }) {
   const access = await requireCurrentAccess();
   const { id } = await params;
-  const candidate = await new CandidateIngestionRepository().getCandidate(
+  const profile = await new EvidenceProfileRepository().getProfile(
     access.organization.id,
     id,
   );
-  if (!candidate) notFound();
-  const name = String(candidate.display_name);
-  const sources = candidate.sources as Record<string, unknown>[];
+  if (!profile) notFound();
+  const candidate = profile.candidate,
+    name = String(candidate.display_name);
+  const claims = profile.claims;
+  const grouped = Object.groupBy(claims, (c) => String(c.claim_type));
+  const reviewed = claims.filter((c) => c.latest_review_action).length;
+  const unknown = [
+    "Notice period",
+    "Expected CTC",
+    "Preferred location",
+  ].filter(
+    (label) =>
+      !claims.some((c) =>
+        String(c.label).toLowerCase().includes(label.toLowerCase()),
+      ),
+  );
   return (
     <AppShell active="candidates">
       <div className="detail-title">
@@ -41,128 +54,212 @@ export default async function CandidatePage({
               {candidate.location ? ` · ${candidate.location}` : ""}
             </p>
           </div>
-          <button className="button secondary">Review profile</button>
+          <span className="stage needs_review">Human review required</span>
         </div>
       </div>
       <div className="tabs">
-        <span className="active">Sources</span>
-        <span>Evidence profile</span>
+        <span className="active">Evidence profile</span>
+        <span>Sources ({profile.sources.length})</span>
         <span>Applications</span>
         <span>Activity</span>
       </div>
       <div className="detail-grid">
-        <section className="surface profile-content">
-          <span className="eyebrow">SOURCE PROVENANCE</span>
-          <h2>
-            {sources.length} immutable candidate source
-            {sources.length === 1 ? "" : "s"}
-          </h2>
+        <main className="surface profile-content">
+          <span className="eyebrow">AUDITABLE CAREER PROFILE</span>
+          <h2>Claims, not conclusions</h2>
           <p>
-            Extracted claims remain unverified until recruiter review. Original
-            documents are served only through short-lived,
-            organization-authorized links.
+            Every fact retains its source and extraction version. Corrections
+            are appended so the original model output remains available.
           </p>
-          <form action={addExternalSource} className="source-add-form">
-            <input type="hidden" name="candidateId" value={id} />
-            <select name="provider" aria-label="Profile source">
-              <option value="github">GitHub URL</option>
-              <option value="portfolio">Portfolio URL</option>
-              <option value="linkedin">Authorized LinkedIn reference</option>
-            </select>
-            <input
-              name="url"
-              type="url"
-              required
-              placeholder="https://…"
-              aria-label="Profile URL"
-            />
-            <button className="button secondary">Add source</button>
-          </form>
-          <div className="source-list">
-            {sources.map((source) => {
-              const signed = source.storage_key
-                ? privateDocumentStorage.sign(String(source.storage_key))
-                : null;
-              return (
-                <article className="source-card" key={String(source.id)}>
-                  <div>
-                    <strong>{String(source.source_label)}</strong>
-                    <span>
-                      {String(source.source_type).replaceAll("_", " ")} ·{" "}
-                      {String(source.permission_method).replaceAll("_", " ")}
-                    </span>
-                  </div>
-                  <span className={`stage ${source.status}`}>
-                    {String(source.status).replaceAll("_", " ")}
-                  </span>
-                  <dl>
-                    <div>
-                      <dt>Imported</dt>
-                      <dd>
-                        {new Date(String(source.imported_at)).toLocaleString(
-                          "en-IN",
+          {claims.length === 0 ? (
+            <div className="empty-state">
+              <h3>No evidence claims yet</h3>
+              <p>
+                Add a claim from an authorized source. Unknown information stays
+                unknown.
+              </p>
+            </div>
+          ) : (
+            Object.entries(grouped).map(([kind, items]) => (
+              <section className="claim-group" key={kind}>
+                <h3>{title(kind)}</h3>
+                {items!.map((claim) => (
+                  <details className="claim-card" key={String(claim.id)}>
+                    <summary>
+                      <div>
+                        <strong>
+                          {String(claim.latest_review_action) === "correct"
+                            ? String(claim.corrected_value)
+                            : String(claim.claim_value)}
+                        </strong>
+                        <span>
+                          {String(claim.label)} · {title(claim.claim_status)}
+                        </span>
+                      </div>
+                      <span
+                        className={`claim-confidence ${claim.latest_review_action ? "reviewed" : ""}`}
+                      >
+                        {claim.latest_review_action
+                          ? title(claim.latest_review_action)
+                          : `${Math.round(Number(claim.confidence) * 100)}% source confidence`}
+                      </span>
+                    </summary>
+                    <div className="claim-detail">
+                      <blockquote>
+                        “
+                        {String(
+                          claim.excerpt ?? "No excerpt coordinates available",
                         )}
-                      </dd>
+                        ”
+                      </blockquote>
+                      <dl>
+                        <div>
+                          <dt>Source</dt>
+                          <dd>{String(claim.source_label)}</dd>
+                        </div>
+                        <div>
+                          <dt>Location</dt>
+                          <dd>
+                            {claim.page_number
+                              ? `Page ${claim.page_number}`
+                              : String(
+                                  claim.section_label ?? "Section unavailable",
+                                )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Extractor</dt>
+                          <dd>{String(claim.extractor_version)}</dd>
+                        </div>
+                      </dl>
+                    {Boolean(claim.review_reason) && (
+                        <p className="review-history">
+                          Latest review: {title(claim.latest_review_action)} —{" "}
+                          {String(claim.review_reason)}. Original retained.
+                        </p>
+                      )}
+                      <form
+                        action={reviewEvidenceClaim}
+                        className="claim-review-form"
+                      >
+                        <input type="hidden" name="candidateId" value={id} />
+                        <input
+                          type="hidden"
+                          name="claimId"
+                          value={String(claim.id)}
+                        />
+                        <input
+                          name="reason"
+                          required
+                          minLength={3}
+                          placeholder="Review reason"
+                          aria-label="Review reason"
+                        />
+                        <input
+                          name="correctedValue"
+                          placeholder="Corrected value (only for correction)"
+                          aria-label="Corrected value"
+                        />
+                        <button
+                          name="action"
+                          value="confirm"
+                          className="button secondary"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          name="action"
+                          value="correct"
+                          className="button secondary"
+                        >
+                          Correct
+                        </button>
+                        <button
+                          name="action"
+                          value="reject"
+                          className="button ghost"
+                        >
+                          Reject
+                        </button>
+                      </form>
                     </div>
-                    <div>
-                      <dt>Safety</dt>
-                      <dd>
-                        {source.malware_scan_status
-                          ? String(source.malware_scan_status).replaceAll(
-                              "_",
-                              " ",
-                            )
-                          : "Reference only"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Extractor</dt>
-                      <dd>
-                        {source.extractor
-                          ? `${source.extractor} ${source.extractor_version}`
-                          : "No scraping performed"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Pages</dt>
-                      <dd>
-                        {source.page_count ? String(source.page_count) : "—"}
-                      </dd>
-                    </div>
-                  </dl>
-                {signed && Boolean(source.document_id) && (
-                    <Link
-                      className="button secondary"
-                      href={`/api/candidate-documents/${source.document_id}?expires=${signed.expires}&signature=${signed.signature}`}
-                      target="_blank"
-                    >
-                      Open private source
-                    </Link>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </section>
+                  </details>
+                ))}
+              </section>
+            ))
+          )}
+          <section className="add-claim">
+            <h3>Add recruiter-evidenced claim</h3>
+            <form action={addEvidenceClaim} className="claim-add-form">
+              <input type="hidden" name="candidateId" value={id} />
+              <select name="claimType" aria-label="Claim type">
+                {[
+                  "employment",
+                  "education",
+                  "project",
+                  "skill",
+                  "certification",
+                  "language",
+                  "logistics",
+                  "other",
+                ].map((v) => (
+                  <option key={v}>{v}</option>
+                ))}
+              </select>
+              <input
+                name="label"
+                required
+                placeholder="Label, e.g. Notice period"
+              />
+              <input name="value" required placeholder="Verified value" />
+              <select name="sourceId" aria-label="Evidence source">
+                {profile.sources.map((s) => (
+                  <option key={String(s.id)} value={String(s.id)}>
+                    {String(s.source_label)}
+                  </option>
+                ))}
+              </select>
+              <input name="section" placeholder="Page or section" />
+              <textarea name="excerpt" placeholder="Supporting excerpt" />
+              <button className="button primary">Add claim</button>
+            </form>
+          </section>
+        </main>
         <aside className="surface overview-panel">
-          <span className="eyebrow">PROFILE CONTROL</span>
+          <span className="eyebrow">PROFILE OVERVIEW</span>
           <div className="big-metric">
+            <strong>{claims.length}</strong>
+            <span>evidence claims</span>
+          </div>
+          <div className="rubric-item">
+            <span>Human reviewed</span>
             <strong>
-              {String(candidate.profile_status).replaceAll("_", " ")}
+              {reviewed}/{claims.length}
             </strong>
           </div>
           <div className="rubric-item">
-            <span>Canonical profile</span>
-            <strong>Organization scoped</strong>
+            <span>Primary skills</span>
+            <strong>
+              {(grouped.skill ?? [])
+                .slice(0, 3)
+                .map((v) => String(v.claim_value))
+                .join(", ") || "Unknown"}
+            </strong>
           </div>
-          <div className="rubric-item">
-            <span>Model status</span>
-            <strong>Human review required</strong>
-          </div>
-          <div className="rubric-item">
-            <span>Applications</span>
-            <strong>Position specific</strong>
-          </div>
+          <h3>Needs verification</h3>
+          {unknown.map((item) => (
+            <div className="verification-gap" key={item}>
+              <span>?</span>
+              <div>
+                <strong>{item}</strong>
+                <small>Not found in approved evidence</small>
+              </div>
+            </div>
+          ))}
+          <p className="privacy-callout">
+            Protected attributes are excluded from evidence and future matching
+            inputs.
+          </p>
         </aside>
       </div>
     </AppShell>

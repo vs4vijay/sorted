@@ -376,6 +376,40 @@ model DuplicateReview {
   @@map("duplicate_reviews")
 }
 
+model EvidenceClaim {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  sourceId String @map("source_id")
+  claimType String @map("claim_type")
+  label String
+  claimValue String @map("claim_value")
+  claimStatus String @map("claim_status")
+  pageNumber Int? @map("page_number")
+  sectionLabel String? @map("section_label")
+  excerpt String?
+  extractorVersion String @map("extractor_version")
+  confidence Float
+  createdByType String @map("created_by_type")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, candidateId, createdAt])
+  @@map("evidence_claims")
+}
+
+model EvidenceClaimCorrection {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  claimId String @map("claim_id")
+  action String
+  correctedValue String? @map("corrected_value")
+  reason String
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, claimId, createdAt])
+  @@map("evidence_claim_corrections")
+}
+
 model OrganizationMember {
   id             String           @id
   organizationId String           @map("organization_id")

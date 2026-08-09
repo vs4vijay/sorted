@@ -1,5 +1,6 @@
 import { executeQuery } from "@/lib/db";
 import type { CandidateExtraction } from "../schemas/ingestion";
+import { projectEvidence } from "../services/evidence-projector";
 type Query = (sql: string, params?: unknown[]) => Promise<unknown[]>;
 export class CandidateIngestionRepository {
   constructor(private query: Query = executeQuery) {}
@@ -139,6 +140,11 @@ export class CandidateIngestionRepository {
         auditId,
       ],
     );
+    for (const claim of projectEvidence(input.markdown ?? ""))
+      await this.query(
+        `INSERT INTO evidence_claims(id,organization_id,candidate_id,source_id,claim_type,label,claim_value,claim_status,section_label,excerpt,extractor_version,confidence,created_by_type) VALUES($1,$2,$3,$4,$5,$6,$7,'explicit',$8,$9,$10,$11,'model')`,
+        [crypto.randomUUID(), input.org, candidateId, input.sourceId, claim.claimType, claim.label, claim.value, claim.section, claim.excerpt, `${input.extractor}:${input.version}`, claim.confidence],
+      );
     for (const [type, values] of [
       ["email", input.candidate.emails],
       ["phone", input.candidate.phones],
