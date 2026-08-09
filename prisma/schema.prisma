@@ -218,6 +218,33 @@ model ProviderExecution {
   @@map("provider_executions")
 }
 
+model VoiceNote {
+  id String @id
+  organizationId String @map("organization_id")
+  positionId String @map("position_id")
+  purpose String
+  languageCode String @map("language_code")
+  consentRecordedById String @map("consent_recorded_by_id")
+  consentRecordedAt DateTime @map("consent_recorded_at")
+  storageKey String? @map("storage_key")
+  mediaType String @map("media_type")
+  byteSize Int @map("byte_size")
+  checksum String
+  status String
+  transcript String?
+  transcriptData Json? @map("transcript_data")
+  providerExecutionId String? @map("provider_execution_id")
+  reviewedTranscript String? @map("reviewed_transcript")
+  reviewedById String? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at")
+  sourceDeletedAt DateTime? @map("source_deleted_at")
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@index([organizationId, positionId, createdAt])
+  @@map("voice_notes")
+}
+
 enum DocumentProcessingStatus {
   uploaded
   scanning
@@ -653,6 +680,51 @@ model OptOut {
   recordedAt DateTime @default(now()) @map("recorded_at")
   @@unique([organizationId, candidateId, channel])
   @@map("opt_outs")
+}
+
+model CandidateCommunicationPreference {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  channel String
+  languageCode String @map("language_code")
+  status String
+  source String
+  recordedById String @map("recorded_by_id")
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  withdrawnAt DateTime? @map("withdrawn_at")
+  @@unique([organizationId, candidateId, channel, languageCode])
+  @@index([organizationId, candidateId, status])
+  @@map("candidate_communication_preferences")
+}
+
+model CandidateAudioAsset {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  messageId String @map("message_id")
+  textHash String @map("text_hash")
+  textApprovalVersion Int @map("text_approval_version")
+  languageCode String @map("language_code")
+  voice String
+  status String @default("generating")
+  provider String?
+  model String?
+  schemaVersion String @map("schema_version")
+  providerRequestId String? @map("provider_request_id")
+  storageKey String? @map("storage_key")
+  mediaType String? @map("media_type")
+  byteSize Int? @map("byte_size")
+  normalizedError String? @map("normalized_error")
+  generatedById String @map("generated_by_id")
+  generatedAt DateTime? @map("generated_at")
+  expiresAt DateTime @map("expires_at")
+  invalidatedAt DateTime? @map("invalidated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@index([organizationId, messageId, createdAt])
+  @@index([organizationId, candidateId, status])
+  @@map("candidate_audio_assets")
 }
 
 model OutreachSequence {

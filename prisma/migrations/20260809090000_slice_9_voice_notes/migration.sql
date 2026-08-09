@@ -1,0 +1,25 @@
+CREATE TABLE voice_notes (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  position_id TEXT NOT NULL REFERENCES positions(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK(purpose IN ('position_requirement','screening_note','panel_feedback')),
+  language_code TEXT NOT NULL,
+  consent_recorded_by_id TEXT NOT NULL,
+  consent_recorded_at TIMESTAMP NOT NULL,
+  storage_key TEXT,
+  media_type TEXT NOT NULL,
+  byte_size INTEGER NOT NULL,
+  checksum TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('uploaded','transcribing','succeeded','simulated','failed','approved')),
+  transcript TEXT,
+  transcript_data JSON,
+  provider_execution_id TEXT REFERENCES provider_executions(id),
+  reviewed_transcript TEXT,
+  reviewed_by_id TEXT,
+  reviewed_at TIMESTAMP,
+  source_deleted_at TIMESTAMP,
+  created_by_id TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX voice_notes_org_position_idx ON voice_notes(organization_id,position_id,created_at);
