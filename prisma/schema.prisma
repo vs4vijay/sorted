@@ -247,8 +247,68 @@ model Candidate {
   identities CandidateIdentity[]
   links ExternalProfileLink[]
   applications Application[]
+  evaluations CandidateEvaluation[]
   @@index([organizationId, createdAt])
   @@map("candidates")
+}
+
+enum EvaluationState {
+  queued
+  evaluated
+  stale
+  failed
+}
+enum EvaluationRecommendation {
+  strong_review
+  review
+  needs_information
+  low_match
+}
+enum CriterionRating {
+  strong
+  meets
+  partial
+  missing
+  contradicted
+}
+
+model CandidateEvaluation {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  positionId String @map("position_id")
+  rubricId String @map("rubric_id")
+  rubricVersion Int @map("rubric_version")
+  state EvaluationState
+  roleFit Int? @map("role_fit")
+  evidenceConfidence Int? @map("evidence_confidence")
+  recommendation EvaluationRecommendation?
+  evidenceSnapshot Json @map("evidence_snapshot")
+  providerExecutionId String? @map("provider_execution_id")
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  criteria CriterionEvaluation[]
+  @@index([organizationId, positionId, createdAt])
+  @@index([organizationId, candidateId, createdAt])
+  @@map("candidate_evaluations")
+}
+
+model CriterionEvaluation {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateEvaluationId String @map("candidate_evaluation_id")
+  criterionId String @map("criterion_id")
+  rating CriterionRating
+  score Int
+  evidenceConfidence Int @map("evidence_confidence")
+  reasoning String
+  evidenceClaimIds Json @map("evidence_claim_ids")
+  gaps Json
+  createdAt DateTime @default(now()) @map("created_at")
+  evaluation CandidateEvaluation @relation(fields: [candidateEvaluationId], references: [id], onDelete: Cascade)
+  @@index([organizationId, candidateEvaluationId])
+  @@map("criterion_evaluations")
 }
 
 model IngestionRun {

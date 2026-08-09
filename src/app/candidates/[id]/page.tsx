@@ -4,18 +4,22 @@ import { AppShell, CandidateAvatar } from "@/components/recruiting/app-shell";
 import { requireCurrentAccess } from "@/lib/auth/session";
 import { EvidenceProfileRepository } from "@/features/candidates/repositories/evidence-profile-repository";
 import { addEvidenceClaim, reviewEvidenceClaim } from "../actions";
+import { matchCandidate } from "../actions";
+import { PositionRepository } from "@/features/positions/repositories/position-repository";
+import { EvaluationRepository } from "@/features/evaluations/repositories/evaluation-repository";
 const title = (value: unknown) => String(value ?? "").replaceAll("_", " ");
 export default async function CandidatePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ position?: string }>;
 }) {
   const access = await requireCurrentAccess();
   const { id } = await params;
-  const profile = await new EvidenceProfileRepository().getProfile(
-    access.organization.id,
-    id,
-  );
+  const selectedPosition=(await searchParams).position;
+  const [profile,positions,evaluationValue] = await Promise.all([new EvidenceProfileRepository().getProfile(access.organization.id,id),new PositionRepository().list(access.organization.id),selectedPosition?new EvaluationRepository().latest(access.organization.id,id,selectedPosition):Promise.resolve(null)]);
+  const evaluation=evaluationValue as (Record<string,unknown>&{criteria:Record<string,unknown>[]})|null;
   if (!profile) notFound();
   const candidate = profile.candidate,
     name = String(candidate.display_name);
@@ -63,6 +67,12 @@ export default async function CandidatePage({
         <span>Applications</span>
         <span>Activity</span>
       </div>
+      <section className="surface candidate-match-panel">
+        <div><span className="eyebrow">POSITION-SPECIFIC EVALUATION</span><h2>{selectedPosition?String(positions.find(p=>String(p.id)===selectedPosition)?.title??"Selected position"):"Choose a position to evaluate"}</h2><p>Role fit is contextual. Evidence confidence reflects what the current sources can support.</p></div>
+        <form><select name="position" defaultValue={selectedPosition??""} aria-label="Position evaluation context"><option value="">Select approved position</option>{positions.map(p=><option key={String(p.id)} value={String(p.id)}>{String(p.title)} · {String(p.rubric_status)}</option>)}</select><button className="button secondary">View</button></form>
+      </section>
+      {selectedPosition && !evaluation && <form action={matchCandidate} className="surface empty-evaluation"><input type="hidden" name="candidateId" value={id}/><input type="hidden" name="positionId" value={selectedPosition}/><div><h2>Not matched</h2><p>Evaluate the current evidence snapshot against the human-approved rubric. This will not create an application or hiring decision.</p></div><button className="button primary">Match against JD</button></form>}
+      {evaluation && <section className="surface scorecard"><div className="scorecard-header"><div><span className="eyebrow">RUBRIC VERSION {String(evaluation.rubric_version)} · {String(evaluation.state)}</span><h2>Explainable scorecard</h2><p>{String(evaluation.recommendation).replaceAll("_"," ")} · {evaluation.current_rubric_version!==evaluation.rubric_version?"Stale — rerun required":"Current evaluation"}</p></div><div className="score-pair"><span><strong>{String(evaluation.role_fit)}</strong>Role fit</span><span><strong>{String(evaluation.evidence_confidence)}</strong>Evidence confidence</span></div></div>{(evaluation.criteria as Record<string,unknown>[]).map(criterion=><details className="criterion-result" key={String(criterion.id)}><summary><div><strong>{String(criterion.name)}</strong><span>{title(criterion.classification)} · {String(criterion.weight)}% weight</span></div><span className={`stage ${String(criterion.rating)}`}>{title(criterion.rating)}</span></summary><p>{String(criterion.reasoning)}</p><div className="criterion-metrics"><span>Criterion score <strong>{String(criterion.score)}</strong></span><span>Evidence confidence <strong>{String(criterion.evidence_confidence)}</strong></span></div>{Array.isArray(criterion.gaps)&&(criterion.gaps as string[]).map(gap=><p className="verification-gap" key={gap}>? {gap}</p>)}</details>)}<form action={matchCandidate}><input type="hidden" name="candidateId" value={id}/><input type="hidden" name="positionId" value={selectedPosition}/><button className="button secondary">Re-run with current evidence</button></form><small>AI-assisted recommendation only. A panel records the hiring decision separately.</small></section>}
       <div className="detail-grid">
         <main className="surface profile-content">
           <span className="eyebrow">AUDITABLE CAREER PROFILE</span>
