@@ -1,253 +1,170 @@
-# Agent Instructions for Postgres-for-Everything Starter
+# AGENTS.md
 
-This file provides guidance for AI coding agents working on this codebase.
+## Project
 
-## Project Architecture
+Sorted is a multilingual AI operations copilot for small and medium businesses, created for the Sarvam Building Hours Hackathon. It turns customer conversations into clear actions and executable workflows.
 
-This is a **Postgres-for-Everything** full-stack starter that uses PostgreSQL for all persistence needs:
-- Application data storage
-- Background job queue (via PostgreSQL LISTEN/NOTIFY + SKIP LOCKED)
-- Local development uses **PGlite** (in-process Postgres)
-- Production uses standard **PostgreSQL**
+The product has three views over the same underlying work:
 
-### Critical Design Principle
-**Single abstraction layer**: The same code must work with both PGlite (local) and PostgreSQL (production). All database operations use raw SQL queries via the `executeQuery` helper function.
+- **Dashboard** — what needs the owner’s attention?
+- **AI Inbox** — what is happening in customer conversations?
+- **Workflows** — what will Sorted do, and what has it already done?
 
-## Tech Stack
+The `Workflow` is the central domain object connecting all three surfaces. Do not implement Dashboard, Inbox, and Workflows as disconnected features.
 
-- **Runtime**: Bun (not npm/yarn/pnpm)
-- **Framework**: Next.js 15 with App Router
-- **Language**: TypeScript
-- **Database**: PostgreSQL (prod) / PGlite (local)
-- **ORM**: Prisma (for schema only, NOT for queries)
-- **Job Queue**: PostgreSQL LISTEN/NOTIFY + SKIP LOCKED (swappable)
-- **Styling**: Tailwind CSS
+## Product principles
 
-## Key Files and Their Roles
+1. Design for nontechnical business owners, not automation engineers.
+2. Prefer business-readable explanations over infrastructure terminology.
+3. Keep a human approval step for sensitive outbound actions.
+4. Treat multilingual voice and text as first-class inputs and outputs.
+5. Show the system’s understanding, missing information, proposed action, and execution state.
+6. Use one reusable workflow composer everywhere; screens provide context rather than implementing separate builders.
+7. Keep analytics lightweight and action-oriented.
 
-### Database Layer
-- `src/lib/db.ts` - Database abstraction layer
-  - Exports `executeQuery()` function for all DB operations
-  - Handles PGlite vs PostgreSQL switching
-  - **NEVER use Prisma client methods** (findMany, create, etc.)
-  - **ALWAYS use executeQuery()** with raw SQL
+## Sarvam AI responsibilities
 
-### Job Queue (Generic Interface)
-- `src/lib/queue/types.ts` - IQueue interface and Job types
-- `src/lib/queue/postgres-queue.ts` - Default implementation using LISTEN/NOTIFY + SKIP LOCKED
-- `src/lib/queue/worker.ts` - Worker implementation
-- `src/lib/worker.ts` - Simple wrapper for backward compatibility
-  - `enqueueJob()` - Add jobs to queue
-  - `getJobs()` - Query job status
-  - Worker runs as separate process
+Sorted is designed around three Sarvam offerings:
 
-### Database Initialization
-- `scripts/init-db.ts` - Creates schema in PGlite
-  - Creates items table
-  - Creates jobs table (custom queue)
-  - Seeds sample data
+- **Saaras Speech-to-Text** transcribes multilingual customer or owner voice input.
+- **Sarvam-105B** detects intent, extracts facts, identifies missing information, drafts responses, and converts natural-language instructions into workflow definitions.
+- **Bulbul** produces multilingual voice responses and voice previews.
 
-### API Routes
-- `src/app/api/items/route.ts` - Item CRUD endpoints
-- `src/app/api/jobs/route.ts` - Job management endpoints
-- **Pattern**: Use `executeQuery()` for all database operations
+Keep provider calls behind adapters. UI and domain code must not depend directly on Sarvam HTTP response shapes. Normalize provider results into Sorted domain types first.
 
-### Background Tasks
-- `src/workers/tasks/*.ts` - Job task definitions
-- `src/workers/tasks/index.ts` - Task registry (must register all tasks)
-- Tasks receive (payload, job) and return Promise<void>
+Until real integrations are implemented, clearly label simulated output. Never imply a real model call, transcription, voice generation, or outbound message occurred when it did not.
 
-## Important Patterns
+Suggested boundaries:
 
-### Database Queries
-```typescript
-// ✅ CORRECT - Use executeQuery()
-import { executeQuery } from '@/lib/db';
-
-const items = await executeQuery('SELECT * FROM items WHERE id = $1', [itemId]);
-const count = await executeQuery<{ count: number }>('SELECT COUNT(*) as count FROM items');
-
-// ❌ WRONG - Don't use Prisma client methods
-const items = await prisma.item.findMany(); // This won't work with PGlite
+```text
+Customer channel / microphone
+          ↓
+Channel and media adapters
+          ↓
+Saaras transcription adapter
+          ↓
+Sorted conversation domain
+          ↓
+Sarvam-105B reasoning adapter
+          ↓
+Workflow engine + human approval
+          ↓
+Text channel adapter / Bulbul voice adapter
 ```
 
-### Adding New Database Tables
-1. Update `prisma/schema.prisma` (for schema documentation)
-2. Add CREATE TABLE in `scripts/init-db.ts`
-3. Run `bun run db:generate` and `bun run db:init`
-4. Use `executeQuery()` to interact with new table
+## Core domain
 
-### Creating Background Jobs
-1. Create task file in `src/workers/tasks/my-task.ts`:
-```typescript
-import { JobPayload, Job } from '@/lib/queue/types';
+Build around these concepts:
 
-export default async function myTask(payload: JobPayload, _job: Job): Promise<void> {
-  // Your task logic
-}
+- `Customer`
+- `Conversation` and `Message`
+- `Intent`, extracted facts, and missing facts
+- `SuggestedAction`
+- `Workflow`, `WorkflowNode`, and `WorkflowEdge`
+- `WorkflowRun` and `WorkflowRunStep`
+- `Approval`
+- `Notification`
+- `DashboardStats`
+
+Workflow runs should be append-oriented and auditable. Preserve business-readable step descriptions alongside structured inputs, outputs, errors, duration, and provider metadata.
+
+## Primary demo flows
+
+Prioritize these end-to-end scenarios:
+
+1. Open Rahul’s multilingual quote conversation, review Sorted’s interpretation, create the suggested missing-information workflow, and activate it.
+2. Turn the Dashboard insight about repeatedly following up unanswered quotes into a workflow.
+3. Manually execute the quote workflow, visualize node progress, pause for approval, approve the response, complete the run, and update Inbox and Dashboard state.
+
+New features should strengthen one of these flows before adding breadth.
+
+## Technical architecture
+
+- Runtime and package manager: **Bun**
+- Framework: **Next.js 16 App Router**
+- UI: **React 19**, TypeScript, Tailwind CSS 4
+- Validation: **Zod**
+- Local database: **PGlite**
+- Production database: **PostgreSQL**
+- Schema documentation/client generation: **Prisma 6**
+- Background work: PostgreSQL queue using `LISTEN/NOTIFY` and `SKIP LOCKED`
+
+The architecture follows a Postgres-for-everything approach. Do not introduce Redis or another queue/database without a concrete requirement.
+
+## Database rules
+
+- Use `executeQuery()` from `src/lib/db.ts` for application queries.
+- Use parameterized SQL with `$1`, `$2`, and so on.
+- Do not use Prisma model methods such as `findMany()` or `create()` in application code.
+- Keep SQL compatible with PGlite and PostgreSQL.
+- Update both `prisma/schema.prisma` and `scripts/init-db.ts` when adding tables.
+- Prisma describes/generates the schema; raw SQL is the application data-access interface.
+- Never commit local database files. `.gitignore` must continue to cover PGlite, `*.db`, SQLite journals, WAL, and shared-memory files.
+
+## Service and fixture boundaries
+
+Do not hardcode expanding domain data directly inside page components. As the prototype grows, organize it under a Sorted feature boundary such as:
+
+```text
+src/
+  app/
+  components/
+  features/sorted/
+    schemas/
+    services/
+    fixtures/
+    sarvam/
+    workflows/
 ```
-2. Register task in `src/workers/tasks/index.ts`:
-```typescript
-worker.registerTask('my-task', myTask);
-```
-3. Use `executeQuery()` for database access
-4. Enqueue with `enqueueJob('my-task', payload)`
 
-### Swapping Queue Implementation
-The queue is designed to be swappable. To use a different queue:
-1. Implement `IQueue` interface in `src/lib/queue/`
-2. Update worker to use new implementation
-3. API routes remain unchanged
+UI components should consume services/domain objects. Fixtures should satisfy the same contracts that production database and Sarvam adapters will later satisfy.
 
-### API Route Pattern
-```typescript
-import { executeQuery } from '@/lib/db';
-import { enqueueJob } from '@/lib/worker';
+## Workflow execution rules
 
-export async function GET(request: NextRequest) {
-  const items = await executeQuery('SELECT * FROM items LIMIT 10');
-  return NextResponse.json({ items });
-}
+- Execution must be deterministic and resumable at approval steps.
+- Persist run and step state before triggering side effects.
+- Make outbound actions idempotent.
+- Store provider request IDs and normalized error information, but never credentials.
+- Technical logs may be available behind a secondary disclosure; default logs must remain business-readable.
+- Register every background task in `src/workers/tasks/index.ts`.
 
-export async function POST(request: NextRequest) {
-  const body = await request.json();
-  await executeQuery('INSERT INTO items (id, name) VALUES ($1, $2)', [id, name]);
-  await enqueueJob('process-item', { itemId: id });
-  return NextResponse.json({ success: true });
-}
-```
+## Security and privacy
 
-## Development Commands
+- Never commit `.env` files, API keys, credentials, customer exports, audio recordings, or database files.
+- Keep `.env.example` limited to placeholder values.
+- Treat customer messages, transcripts, generated audio, phone numbers, and addresses as sensitive data.
+- Avoid logging raw conversation content in production.
+- Require explicit approval before sending customer-facing content unless a workflow is deliberately configured otherwise.
+
+## Commands
+
+Use Bun, never npm, yarn, or pnpm.
 
 ```bash
-# Install dependencies
 bun install
-
-# Generate Prisma client
 bun run db:generate
-
-# Initialize PGlite database
 bun run db:init
-
-# Start dev server (Next.js only - no worker in PGlite mode)
-bun run dev
-
-# Start only Next.js
 bun run dev:next
-
-# Start only Worker (requires PostgreSQL)
+bun run dev
 bun run dev:worker
+bun run lint
+bun run build
 ```
 
-## Common Modifications
+The web app runs on `http://localhost:7070`.
 
-### Adding a New Model
-1. Add to `prisma/schema.prisma`
-2. Add CREATE TABLE to `scripts/init-db.ts`
-3. Create API routes in `src/app/api/[model]/`
-4. Use `executeQuery()` for all operations
+## Development workflow
 
-### Adding a New Background Job
-1. Create `src/workers/tasks/my-job.ts`
-2. Export default function with (payload, job) signature
-3. Register in `src/workers/tasks/index.ts`
-4. Enqueue from API routes with `enqueueJob()`
+1. Read the relevant Next.js documentation in `node_modules/next/dist/docs/` before relying on remembered framework behavior.
+2. Preserve Server Components by default; add `'use client'` only when interactivity requires it.
+3. Define or update domain types before expanding UI state.
+4. Keep real providers behind interfaces and maintain fixture implementations for the demo.
+5. Validate user and provider input with Zod.
+6. Run targeted checks while iterating, then `bun run build` before handoff.
+7. Add Playwright coverage for the three primary demo flows when behavior changes.
 
-### Swapping Queue System
-1. Implement `IQueue` interface in new file
-2. Create new worker using your queue
-3. Update `src/lib/worker.ts` to import from new implementation
+## Current implementation status
 
-### Modifying Database Schema
-1. Update `prisma/schema.prisma`
-2. Update `scripts/init-db.ts` with new CREATE/ALTER statements
-3. Run `bun run db:init` (or delete dev.db and re-init)
+The current application is a UI-first prototype. Dashboard, AI Inbox, Workflows, workflow composition, and simulated execution are present. Sarvam API calls, real customer channels, production workflow execution, authentication, and the final Sorted database schema are not yet implemented.
 
-## Critical Rules
-
-1. **Never use Prisma client query methods** - Only `executeQuery()`
-2. **Use parameterized queries** - Always use `$1, $2` placeholders
-3. **Use Bun commands** - Not npm/yarn/pnpm
-4. **Raw SQL only** - PGlite doesn't support Prisma migrations
-5. **Keep PGlite/Postgres compatible** - Test SQL works with both
-6. **Register all tasks** - Add new tasks to task registry
-
-## Next.js Specifics
-
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
-
-### Additional Next.js Notes
-- Using **App Router** (not Pages Router)
-- Server Components by default
-- Client Components need `'use client'` directive
-- Route handlers in `route.ts` files
-
-## Database Schema
-
-### Items Table
-```sql
-CREATE TABLE items (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### Jobs Table (Custom Queue)
-```sql
-CREATE TABLE jobs (
-  id TEXT PRIMARY KEY,
-  task_identifier TEXT NOT NULL,
-  payload JSON DEFAULT '{}'::JSON NOT NULL,
-  status TEXT DEFAULT 'pending' NOT NULL,
-  priority INTEGER DEFAULT 0 NOT NULL,
-  run_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  attempts INTEGER DEFAULT 0 NOT NULL,
-  max_attempts INTEGER DEFAULT 25 NOT NULL,
-  last_error TEXT,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  locked_at TIMESTAMP,
-  locked_by TEXT,
-  completed_at TIMESTAMP,
-  key TEXT UNIQUE,
-  queue TEXT
-);
-```
-
-## Troubleshooting for Agents
-
-**Error: Prisma client method doesn't work**
-- Solution: Replace with `executeQuery()` and raw SQL
-
-**Error: Migration failed**
-- Solution: PGlite doesn't support Prisma migrations. Use `scripts/init-db.ts`
-
-**Error: Worker not processing jobs**
-- Solution: Ensure task is registered in `src/workers/tasks/index.ts`
-
-**Error: Database not found**
-- Solution: Run `bun run db:init` to create dev.db
-
-## Environment Variables
-
-- `DATABASE_URL` - Database connection string
-  - Local: `file:./dev.db` (PGlite)
-  - Production: `postgresql://...` (PostgreSQL)
-
-## Philosophy Reminders
-
-This starter embraces **simplicity through PostgreSQL**:
-- One database for everything
-- No Redis, RabbitMQ, or additional services
-- PGlite makes local development seamless
-- Same code works in development and production
-- Queue system is swappable - easy to replace with production-grade system
-
-When making changes, preserve this philosophy and the PGlite/PostgreSQL dual compatibility.
+Preserve that distinction in code, documentation, demos, and user-facing copy.

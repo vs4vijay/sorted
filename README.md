@@ -1,443 +1,196 @@
-# Postgres-for-Everything Full-Stack Starter
+# Sorted
 
-A production-ready Next.js full-stack starter using the **"Postgres for everything"** philosophy. No Redis, no RabbitMQ, no additional infrastructure - just Postgres.
+Sorted is a multilingual AI operations copilot for small and medium businesses. It understands customer conversations, highlights what needs attention, recommends repeatable workflows, and helps owners safely execute them.
 
-## Philosophy
+Built for the **Sarvam Building Hours Hackathon**.
 
-This starter embraces simplicity by using PostgreSQL for all persistence needs:
-- **Data storage**: Your application data
-- **Job queue**: Background jobs via PostgreSQL LISTEN/NOTIFY + SKIP LOCKED
-- **Caching**: Query results and materialized views (optional)
-- **Local development**: PGlite runs in-process, no Docker needed
+## The idea
 
-## Tech Stack
+Business owners often manage quotes, bookings, complaints, and follow-ups across fast-moving conversations. Important context remains trapped in chat threads, and repeated manual work is easy to miss.
 
-### Frontend
-- **Next.js 15** - App Router for full-stack React
-- **React 19** - Latest React with Server Components
-- **Tailwind CSS** - Utility-first styling
-- **TypeScript** - Type-safe development
+Sorted turns every conversation into a simple progression:
 
-### Backend
-- **Next.js API Routes** - Serverless API endpoints
-- **Prisma ORM** - Type-safe database access
-- **PostgreSQL** - Production database
-- **PGlite** - In-process Postgres for local development
-- **Postgres Queue** - Custom job queue using LISTEN/NOTIFY + SKIP LOCKED
-- **Zod** - Runtime validation
+```text
+Understand → Decide → Execute
+   Inbox     Dashboard   Workflows
+```
 
-### Development
-- **Bun** - Fast package manager and runtime
-- **ESLint** - Code linting
-- **Custom dev runner** - Concurrent Next.js processes
+All three product surfaces operate on the same underlying workflows:
 
-## Features
+- **Dashboard** answers “What needs my attention?”
+- **AI Inbox** answers “What is happening in customer conversations?”
+- **Workflows** answer “What will Sorted do, and what did it do?”
 
-### Database Abstraction
-- Single codebase works with both PGlite (local) and PostgreSQL (production)
-- Prisma provides seamless abstraction layer
-- No environment-specific code needed
+## Sarvam-powered experience
 
-### Background Jobs
-- Postgres-based job queue using native LISTEN/NOTIFY + SKIP LOCKED
-- No additional services (Redis, RabbitMQ, etc.)
-- Built-in retry logic and error handling
-- Job persistence and history
-- Atomic job claiming prevents race conditions
+Sorted is designed to use:
 
-### Job Dashboard
-- Custom Next.js dashboard for job monitoring
-- View job status, attempts, errors
-- Manual job triggering for testing
-- Real-time stats and filtering
+- **Saaras Speech-to-Text** for multilingual voice messages and spoken commands
+- **Sarvam-105B** for intent detection, fact extraction, response drafting, and natural-language workflow creation
+- **Bulbul** for natural multilingual voice previews and customer responses
 
-### Developer Experience
-- Single command starts everything: `bun run dev`
-- PGlite runs in-process - no Docker setup
-- Hot reload for both frontend and backend
-- Type-safe database queries with Prisma
+The current hackathon prototype simulates these boundaries in the UI. Real Sarvam API calls and real message delivery are the next integration phase.
 
-## Getting Started
+## Current prototype
 
-> **📝 Important**: This starter supports two development modes:
-> - **Quick Mode** (PGlite) - Frontend + API only, no background worker [Default]
-> - **Full Stack Mode** (PostgreSQL) - Complete system with background worker
->
-> See [DEV_MODES.md](DEV_MODES.md) for detailed comparison.
+The app includes:
 
-### Quick Start (Recommended)
+- Task-oriented business Dashboard
+- Three-pane multilingual AI Inbox
+- Intent, confidence, known facts, and missing facts
+- Recommended actions and workflow opportunities
+- Reusable workflow composer available across the product
+- Visual workflow canvas
+- Simulated workflow execution with node progress
+- Human approval step
+- Business-readable notifications and logs
+- Responsive desktop and mobile layouts
+
+### Demo scenario
+
+1. Open Rahul Sharma’s WhatsApp conversation in AI Inbox.
+2. Review the detected quote and booking intents.
+3. See that the AC model and exact address are missing.
+4. Create the suggested information-collection workflow.
+5. Activate it and open Workflows.
+6. Run the workflow for Rahul and watch its execution progress toward approval.
+
+This demonstrates that Dashboard, Inbox, and Workflows are three views of one coherent system.
+
+## Tech stack
+
+- Bun
+- Next.js 16 App Router
+- React 19 and TypeScript
+- Tailwind CSS 4
+- Zod
+- PGlite for local development
+- PostgreSQL for production
+- Prisma 6 for schema documentation and client generation
+- PostgreSQL-backed job queue using `LISTEN/NOTIFY` and `SKIP LOCKED`
+
+Sorted follows a Postgres-for-everything architecture: application data and background jobs share one persistence system, avoiding extra infrastructure during the hackathon.
+
+## Getting started
+
+### Requirements
+
+- [Bun](https://bun.sh/) 1.x or newer
+- PostgreSQL only if running the full worker-backed mode
+
+### Install and run
 
 ```bash
-# Install and setup
+git clone git@github.com:vs4vijay/sorted.git
+cd sorted
 bun install
 bun run db:generate
-bun run db:init
-
-# Start development (API + Frontend only)
 bun run dev:next
 ```
 
-Visit http://localhost:7070 - Everything works except background job processing.
+Open [http://localhost:7070](http://localhost:7070).
 
-**Need background jobs?** See [DEV_MODES.md](DEV_MODES.md) for Full Stack Mode with PostgreSQL.
+The current UI prototype does not require database initialization. To exercise the inherited local persistence APIs, initialize PGlite with:
 
-### Prerequisites
-- **Bun** (v1.0+) - [Install Bun](https://bun.sh)
-- **PGlite** - Included (no installation needed)
-- **PostgreSQL** - Optional (only for background jobs)
-
-### Detailed Setup Steps
-
-1. Clone the repository:
-```bash
-git clone <your-repo-url>
-cd vibecoding-starter
-```
-
-2. Install dependencies:
-```bash
-bun install
-```
-
-3. Generate Prisma client:
-```bash
-bun run db:generate
-```
-
-4. Initialize database (creates PGlite database with schema + seed data):
 ```bash
 bun run db:init
 ```
 
-5. Start development:
+Local database files are ignored by Git.
+
+## Development modes
+
+### UI and API development
+
 ```bash
-# Option A: Quick Mode (No background worker)
 bun run dev:next
-
-# Option B: Full Stack Mode (Requires PostgreSQL - see DEV_MODES.md)
-bun run dev
 ```
 
-### Verify Setup
+Uses Next.js on port `7070`. PGlite is used when `DATABASE_URL` is absent or begins with `file:`.
 
-1. Open [http://localhost:7070](http://localhost:7070) - View homepage
-2. Open [http://localhost:7070/jobs](http://localhost:7070/jobs) - View job dashboard
-3. Test API: [http://localhost:7070/api/items](http://localhost:7070/api/items)
-
-## Project Structure
-
-```
-vibecoding-starter/
-├── src/
-│   ├── app/                    # Next.js App Router
-│   │   ├── api/               # API routes
-│   │   │   ├── items/         # CRUD endpoints
-│   │   │   └── jobs/          # Job management
-│   │   ├── jobs/              # Job dashboard page
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   ├── components/            # React components
-│   │   └── jobs/              # Job dashboard components
-│   ├── lib/                   # Shared utilities
-│   │   ├── db.ts             # Prisma client (PGlite/Postgres)
-│   │   ├── worker.ts         # Queue wrapper
-│   │   └── queue/            # Queue implementation
-│   │       ├── types.ts      # Queue interfaces
-│   │       ├── postgres-queue.ts  # LISTEN/NOTIFY implementation
-│   │       └── worker.ts     # Worker implementation
-│   └── workers/               # Background job definitions
-│       └── tasks/
-│           ├── index.ts      # Task registry
-│           ├── process-item.ts
-│           └── send-notification.ts
-├── prisma/
-│   ├── schema.prisma          # Database schema
-│   ├── migrations/            # Migration history
-│   └── seed.ts               # Seed data
-├── scripts/
-│   └── dev.ts                # Development runner
-├── .env.example
-│   ├── .env.local
-│   ├── package.json
-│   └── README.md
-```
-
-## Usage
-
-### Creating Items (API)
-
-Create a new item:
-```bash
-curl -X POST http://localhost:7070/api/items \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "My Item",
-    "description": "This will trigger a background job",
-    "processInBackground": true
-  }'
-```
-
-Get all items:
-```bash
-curl http://localhost:7070/api/items
-```
-
-Get specific item:
-```bash
-curl http://localhost:7070/api/items/{id}
-```
-
-### Background Jobs
-
-Jobs are automatically enqueued when creating items with `processInBackground: true`.
-
-View jobs in the dashboard: [http://localhost:7070/jobs](http://localhost:7070/jobs)
-
-Manually enqueue a job:
-```bash
-curl -X POST http://localhost:7070/api/jobs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "taskName": "process-item",
-    "payload": {
-      "itemId": "your-item-id"
-    }
-  }'
-```
-
-### Creating New Jobs
-
-1. Create a new task file in `src/workers/tasks/`:
-
-```typescript
-// src/workers/tasks/my-task.ts
-import { JobPayload, Job } from '@/lib/queue/types';
-
-export default async function myTask(payload: JobPayload, _job: Job): Promise<void> {
-  const { data } = payload as { data: string };
-
-  console.log('Processing:', data);
-
-  // Your task logic here
-  await doSomething(data);
-
-  console.log('Completed successfully');
-}
-```
-
-2. Register the task in `src/workers/tasks/index.ts`:
-
-```typescript
-import { Worker } from '@/lib/queue/worker';
-
-export function registerAllTasks(worker: Worker): void {
-  worker.registerTask('my-task', myTask);
-}
-```
-
-3. Enqueue the job from your API route:
-
-```typescript
-import { enqueueJob } from '@/lib/worker';
-
-await enqueueJob('my-task', {
-  data: 'example',
-});
-```
-
-### Adding New Models
-
-1. Update `prisma/schema.prisma`:
-```prisma
-model MyModel {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-
-  @@map("my_models")
-}
-```
-
-2. Generate Prisma client:
-```bash
-bun run db:generate
-```
-
-3. Push schema changes:
-```bash
-bun run db:push
-```
-
-4. Create API routes in `src/app/api/my-model/route.ts`
-
-## Database Scripts
+### Full stack with worker
 
 ```bash
-# Generate Prisma client
-bun run db:generate
-
-# Push schema changes (for development)
-bun run db:push
-
-# Create migration (for production)
-bun run db:migrate
-
-# Seed database
-bun run db:seed
-
-# Open Prisma Studio (database GUI)
-bun run db:studio
+DATABASE_URL="postgresql://user:password@localhost:5432/sorted" bun run dev
 ```
 
-## Development Scripts
+This runs Next.js and the PostgreSQL-backed worker. See [DEV_MODES.md](DEV_MODES.md) for the starter runtime details that remain applicable.
+
+## Useful commands
 
 ```bash
-# Start full development environment (Next.js + Worker)
-bun run dev
-
-# Start only Next.js
-bun run dev:next
-
-# Start only Worker (requires PostgreSQL)
-bun run dev:worker
-
-# Build for production
-bun run build
-
-# Start production server
-bun run start
-
-# Run linter
-bun run lint
+bun run dev:next      # Start the web application
+bun run dev           # Start web and worker processes
+bun run dev:worker    # Start only the worker
+bun run db:generate   # Generate the Prisma client
+bun run db:init       # Initialize the local PGlite database
+bun run lint          # Run ESLint
+bun run build         # Create a production build
 ```
 
-## Production Deployment
+## Architecture
 
-### Database Setup
-
-1. Update `.env` with production PostgreSQL connection:
-```env
-DATABASE_URL="postgresql://user:password@host:5432/database"
-NODE_ENV="production"
+```text
+Next.js UI
+  ├── Dashboard
+  ├── AI Inbox
+  └── Workflow composer, canvas, runs, and approvals
+          ↓
+Sorted domain and service layer
+  ├── Conversation services
+  ├── Workflow services
+  ├── Fixture/simulation adapters
+  └── Sarvam and channel adapters
+          ↓
+PGlite locally / PostgreSQL in production
+          ↓
+PostgreSQL-backed workflow jobs
 ```
 
-2. Run migrations:
-```bash
-bun run db:migrate
-```
+Application database access goes through `executeQuery()` in `src/lib/db.ts` using parameterized raw SQL so the same queries work with PGlite and PostgreSQL. Prisma model methods are not the application query interface.
 
-### Deployment Options
+## Planned domain model
 
-This starter can be deployed to:
-- **Vercel** - Next.js native platform
-- **Railway** - With Postgres addon
-- **Render** - Web service + Postgres
-- **Fly.io** - Docker deployment
-- **Any Node.js host** with Postgres access
+- Customers and conversations
+- Messages, language, transcripts, and channel metadata
+- Intents, extracted facts, and missing facts
+- Suggested actions and workflow recommendations
+- Workflow definitions, nodes, and edges
+- Workflow runs and step histories
+- Human approvals
+- Notifications and dashboard statistics
 
-### Worker Deployment
+## Delivery phases
 
-For production, run the worker as a separate process:
+### Phase 1 — UI and simulated execution
 
-```bash
-bun run dev:worker
-```
+- Dashboard, AI Inbox, and Workflows
+- Seeded multilingual conversations
+- Simulated AI interpretation and workflow execution
+- Human approval
+- End-to-end demo coverage
 
-Or use a process manager like PM2:
-```bash
-pm2 start "bun run dev:worker" --name worker
-```
+### Phase 2 — real integrations
 
-## Environment Variables
+- Saaras transcription
+- Sarvam-105B reasoning and workflow generation
+- Bulbul voice generation
+- WhatsApp or other customer channels
+- Durable workflow execution and outbound delivery
 
-### Required
+The simulation and production implementations should satisfy the same domain interfaces so integration does not require rewriting the UI.
 
-- `DATABASE_URL` - Database connection string
-  - Local: `file:./dev.db` (PGlite)
-  - Production: `postgresql://user:password@host:5432/database`
+## Data safety
 
-### Optional
+Do not commit:
 
-- `NODE_ENV` - Environment mode (`development` | `production`)
+- `.env` files or Sarvam credentials
+- PGlite, SQLite, or PostgreSQL data files
+- Customer exports or raw conversation archives
+- Generated customer audio
 
-## Architecture Decisions
+Use `.env.example` for placeholder configuration only.
 
-### Why Postgres for Everything?
+## Repository
 
-1. **Simplicity** - One system to manage, backup, and monitor
-2. **Cost** - No additional services (Redis, RabbitMQ, etc.)
-3. **ACID Guarantees** - Transactional job queuing
-4. **Postgres is Fast** - Modern Postgres handles high throughput
-5. **Unified Queries** - Join jobs with application data
-
-### Why PGlite for Local Development?
-
-1. **No Installation** - Runs in-process, no Docker needed
-2. **Fast** - SQLite-like performance for development
-3. **Compatible** - Prisma works identically with both
-4. **Portable** - Single file database (`dev.db`)
-
-### Why Postgres LISTEN/NOTIFY + SKIP LOCKED?
-
-1. **Postgres-native** - Uses native Postgres features
-2. **Atomic claiming** - SKIP LOCKED prevents race conditions
-3. **Notification-based** - LISTEN/NOTIFY for real-time job dispatch
-4. **Simple** - No external dependencies or complexity
-5. **Extensible** - Easy to swap for Redis, RabbitMQ, etc.
-
-### Queue Abstraction
-
-The queue system is designed to be easily swappable:
-
-```
-src/lib/queue/
-├── types.ts           # IQueue interface (defines contract)
-├── postgres-queue.ts  # Default implementation (LISTEN/NOTIFY)
-└── worker.ts         # Worker implementation
-```
-
-To switch to a different queue (Redis, RabbitMQ, etc.):
-1. Implement the `IQueue` interface in a new file
-2. Update the worker to use your implementation
-3. No changes needed to API routes or tasks
-
-## Troubleshooting
-
-### PGlite Issues
-
-If you encounter PGlite errors, delete the database file:
-```bash
-rm dev.db
-bun run db:init
-```
-
-### Worker Not Processing Jobs
-
-1. Check worker is running (should see log output)
-2. Verify DATABASE_URL is correct
-3. Check job dashboard for errors
-4. Review task file exports and registration
-
-### Prisma Client Errors
-
-Regenerate Prisma client:
-```bash
-bun run db:generate
-```
-
-## Contributing
-
-Contributions welcome! Please open an issue or PR.
-
-## License
-
-MIT
-
-## Credits
-
-Built with:
-- [Next.js](https://nextjs.org)
-- [Prisma](https://prisma.io)
-- [PGlite](https://github.com/electric-sql/pglite)
-- [PostgreSQL](https://postgresql.org)
-- [Bun](https://bun.sh)
+This is a private hackathon repository maintained by `vs4vijay`.
