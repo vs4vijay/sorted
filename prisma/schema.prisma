@@ -958,3 +958,14 @@ model AuditEvent {
   @@index([organizationId, subjectType, subjectId])
   @@map("audit_events")
 }
+
+model RateLimitEvent {
+  id             String   @id
+  organizationId String   @map("organization_id")
+  actorId        String   @map("actor_id")
+  action         String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, actorId, action, createdAt])
+  @@map("rate_limit_events")
+}

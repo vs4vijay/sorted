@@ -1,5 +1,6 @@
 import "server-only";
 import { CriterionEvaluationOutputSchema, type CriterionEvaluationOutput } from "../schemas/evaluation";
+import { providerEnabled } from '@/lib/providers/provider-controls';
 
 type Criterion = { id: string; name: string; description: string; evidenceExpectations: string };
 type Claim = { id: string; label: string; value: string; status: string; confidence: number };
@@ -31,7 +32,7 @@ export class SarvamCriterionEvaluationProvider implements CriterionEvaluationPro
 }
 
 export async function evaluateCriteria(criteria: Criterion[], claims: Claim[]) {
-  if (!process.env.SARVAM_API_KEY) return new FakeCriterionEvaluationProvider().evaluate(criteria, claims);
+  if (!providerEnabled('sarvam')) return new FakeCriterionEvaluationProvider().evaluate(criteria, claims);
   try { return await new SarvamCriterionEvaluationProvider().evaluate(criteria, claims); }
   catch (error) { const fallback = await new FakeCriterionEvaluationProvider().evaluate(criteria, claims); return { ...fallback, execution: { ...fallback.execution, error: { code: String((error as { code?: string }).code ?? "provider_error"), message: "Sarvam evaluation was unavailable; deterministic simulated output was used." } } }; }
 }

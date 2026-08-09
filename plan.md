@@ -196,7 +196,7 @@ Every vertical slice must include:
 
 ## Delivery progress tracker
 
-Last updated: 2026-08-10 (document upload security and quarantine recovery complete; launch readiness remains in progress)
+Last updated: 2026-08-10 (operational controls, rate limits, kill switches, and scanner adapter complete; launch readiness remains in progress)
 
 | Slice | Status | Evidence and remaining work |
 |---|---|---|
@@ -211,10 +211,12 @@ Last updated: 2026-08-10 (document upload security and quarantine recovery compl
 | 8 — Follow-up sequences and pipeline handoff | Complete for hackathon scope | Added approved reminder steps, business-hour scheduling, persisted jobs, reply/bounce/opt-out/pause/pipeline stop conditions, append-only stage transitions, and a human-only recruiter-screening handoff with an immutable evidence/decision snapshot. |
 | 9 — Saaras voice notes | Complete for hackathon scope | Added consent-gated private audio, versioned Saaras transcription behind a server-only adapter, deterministic simulated fallback, human transcript review, source deletion, and approved draft-rubric conversion. |
 | 10 — Bulbul candidate communication | Complete for hackathon scope | Added opt-in multilingual audio previews generated only from approved text, server-only Bulbul integration with simulated fallback, private expiring playback, audit provenance, deletion, and text-change invalidation. |
-| 11 — Launch readiness | In progress — privacy, fairness inspection, retention, and document upload security complete | Privacy requests, hosted opt-out, audited retention enforcement, and recommendation reconstruction remain complete. Uploads now require extension, browser media type, file signature, complete PDF/DOCX structure, and passive-content validation. A server-only malware-scanner interface returns strict Zod-normalized results; the deterministic local fixture records clean, infected, and scanner-error outcomes without implying a production scan. Documents are persisted in `pending`, extraction and download require an explicit clean verdict, detected threats and scan failures remain private and organization-scoped, and recruiters see an isolated-document recovery panel. Scan provider/version/request/error/timestamp and an audit event are persisted. Cross-organization document access and scan mutations have adversarial coverage. All 100 tests pass; Prisma generation, clean PGlite initialization, lint (0 errors; 6 pre-existing warnings), and production build pass. Playwright CLI Chrome verified synthetic threat upload → quarantine → no candidate extraction → private route 404, 390×844 responsive layout without overflow, and 0 console errors/warnings on the normal page; captures: `.images/slice-11-document-quarantine-verified-2026-08-10.png` and `.images/slice-11-document-quarantine-mobile-2026-08-10.png`. Remaining: production malware-scanner adapter selection, rate limits/provider kill switches, operations/recovery drills, security/accessibility audits, load/cross-browser coverage, and the full synthetic production run. |
+| 11 — Launch readiness | In progress — privacy, fairness, retention, document security, and operational controls complete | Privacy requests, hosted opt-out, audited retention enforcement, recommendation reconstruction, strict document validation, quarantine, and cross-organization access coverage remain complete. Added a fail-closed production HTTP malware-scanner adapter with normalized/versioned results and deterministic fixture fallback; server-side Sarvam, email, and scanner kill switches; PostgreSQL/PGlite organization-and-actor-scoped limits for uploads, matching, invitations, exports, and email sends; an administrator operations screen for queue/provider/quarantine signals; and worker/restore/provider incident runbooks. Next.js and eslint-config-next were upgraded from 16.2.4 to 16.2.11, and compatible dependencies were refreshed. All 104 tests, TypeScript, Prisma generation, clean PGlite initialization, lint (0 errors; 6 pre-existing warnings), and production build pass. Playwright CLI Chrome verified the operations route at desktop and 390×844 with no horizontal overflow or console errors/warnings; captures: `.images/slice-11-operations-safety-verified-2026-08-10.png` and `.images/slice-11-operations-safety-mobile-2026-08-10.png`. `bun audit` still reports 11 high, 3 moderate, and 1 low transitive advisories in build/runtime dependencies without compatible upstream resolutions, so the “no high findings” release gate is not met. Remaining: configure and exercise a real scanner endpoint, execute documented PostgreSQL restore and worker-restart drills, resolve or formally mitigate residual advisories, complete accessibility/load/cross-browser coverage, redeploy, and run the full synthetic production journey. |
 
 ### Current handoff
+- 2026-08-10 Development database plan (not yet implemented): replace the two-process PGlite file setup with a single-owner PGlite socket server for local dev. `web` and `worker` connect over Postgres wire to one process that owns `dev.db`, eliminating the concurrent-file race and the inline-job workaround below. Full plan and acceptance criteria: "Development database: single-owner PGlite socket server" section.
 
+- 2026-08-10 Slice 11 operational controls: added `rate_limit_events` to Prisma, PGlite initialization, and a PostgreSQL migration; sensitive actions now enforce organization-and-actor-scoped hourly limits using parameterized SQL. `SARVAM_ENABLED`, `EMAIL_DELIVERY_ENABLED`, and `MALWARE_SCANNER_ENABLED` provide server-only kill switches; disabled AI/email paths remain honestly simulated. CVs can use a production multipart HTTP scanner that fails closed on timeout, bad responses, or outages, while local validation retains deterministic clean/threat/error fixtures. Administrators can inspect queue, stuck/failed work, quarantine, provider failures, and provider mode at `/settings/operations`; recovery procedures are in `OPERATIONS.md`. Next.js/eslint-config-next are upgraded to 16.2.11 and compatible dependencies refreshed. All 104 tests, TypeScript, Prisma generation, clean PGlite initialization, lint (0 errors; 6 existing warnings), and production build pass. Chrome verified desktop/mobile operations UI, 390px no-overflow, and zero console errors/warnings; captures: `.images/slice-11-operations-safety-verified-2026-08-10.png` and `.images/slice-11-operations-safety-mobile-2026-08-10.png`. `bun audit` still reports 11 high/3 moderate/1 low transitive findings; do not mark Slice 11 complete until those are upgraded or explicitly mitigated and the real scanner, restore/worker drills, cross-browser/load/accessibility audit, redeploy, and full synthetic production journey are verified.
 - 2026-08-10 Slice 11 document security: CV validation now verifies declared media type, signatures, complete PDF/DOCX structure, and rejects active/embedded PDF content before persistence. Persisted documents pass through a versioned `MalwareScanner` boundary; the deterministic fixture honestly labels clean results simulated and produces auditable threat/error states. Extraction and private download are gated on a clean verdict. Threats and scanner failures stay organization-scoped in quarantine, with recruiter-visible retry guidance for outages and replacement guidance for threats. Provider/version/request/error/timestamp metadata and `candidate_document.security_scanned` audit events are stored. Four repository security tests plus nine validation/scanner tests cover cross-organization denial, scoped mutations, structure/content-type checks, clean, threat, and normalized outage behavior. All 100 tests, Prisma generation, clean PGlite initialization, lint (0 errors; 6 existing warnings), and production build pass. Chrome verified the synthetic threat path and private-route denial, desktop/mobile rendering, no overflow, and zero normal-page console errors/warnings; captures: `.images/slice-11-document-quarantine-verified-2026-08-10.png` and `.images/slice-11-document-quarantine-mobile-2026-08-10.png`. Next pickup: production scanner adapter selection plus rate limits and Sarvam/email kill switches.
 - 2026-08-10 journey hardening: `bun run dev` now initializes the local PGlite schema before serving requests; protected pages redirect unauthenticated sessions; deterministic CV fallback extracts source-backed name, headline, location, email, phone, ownership, and notice-period evidence; outreach disables and safely reports sends without an email; dashboard/JD copy uses persisted user and position data; final shortlist decisions are idempotent and the completed form is hidden. All 78 tests, TypeScript, lint (0 errors; 6 pre-existing warnings), and the production build pass. Chrome verified signup → approved position → DOCX import → evidence/matching → panel shortlist → approved simulated email → reply → recruiter screening with zero console errors.
 - `/setup` collision UX is implemented locally and on `main` for field-level email/slug errors; case-insensitive email uniqueness hardening (`users_email_lower_key`, write-path `LOWER(email)`, PGlite atomicity tests) is on `fix/setup-review-hardening` and still needs merge + Render redeploy before treating live production as fully verified. Use a unique email/slug (not the old `acme-india` / `ananya@company.in` placeholders).
@@ -226,8 +228,70 @@ Last updated: 2026-08-10 (document upload security and quarantine recovery compl
 - Preserve the Slice 3 privacy boundary: original files stay outside `public/`, access remains organization-authorized and short-lived, and raw document text must not enter logs or screenshots. Slice 5 snapshots only normalized evidence claims with provenance.
 - Use `SARVAM_API_KEY` only through the server environment. Criterion matching validates `criterion-evaluation.v1`, requires exactly one judgment for every approved rubric criterion, records provider execution metadata, and falls back to clearly simulated output. Never add pasted credentials to source, screenshots, or logs.
 - Slice 5 follow-up breadth, if prioritized after the primary demo loop, is named/saved compound candidate views, bulk match orchestration, side-by-side comparison, and audited manual score overrides. The current candidate table supports the required no-JD talent-pool mode and a selected-position ranked mode.
-- The local PGlite path processes persisted jobs inline after enqueueing because separate PGlite processes cannot safely share the same local store; PostgreSQL preview/production continues through the registered `extract-cv-document` worker task.
+- The local PGlite inline-processing workaround and the two-process `dev.db` race are superseded by the "Development database: single-owner PGlite socket server" plan below. Remove the inline path as part of that work; do not extend it.
 - Do not mark Slice 0 fully complete until preview deployment, production PostgreSQL, and backup behavior have been verified in the target hosting environment.
+
+## Development database: single-owner PGlite socket server (plan)
+
+Status: **planned — not implemented**. Supersedes the handoff note "local PGlite path processes persisted jobs inline after enqueueing because separate PGlite processes cannot safely share the same local store".
+
+### Why
+
+Today `scripts/dev.ts` spawns two child processes (`next dev`, `src/lib/worker.ts`) that both call `executeQuery()` → `getPGliteInstance()` → `new PGlite('dev.db')` on the same file. PGlite is single-connection per instance, so two processes on one file means last-writer-wins corruption; LISTEN/NOTIFY never crosses processes (each instance's notifications are in-memory), so the worker always falls back to 1s polling; and plan.md documents an inline-job workaround for local mode.
+
+Goal: exactly one process owns `dev.db`; both consumers connect to it over the Postgres wire protocol. This is not the browser-only multi-tab worker feature — it is `@electric-sql/pglite-socket`, an official ElectricSQL package that exposes a PGlite instance as a TCP Postgres server with a connection multiplexer.
+
+```text
+Before:                          After:
+web    -- new PGlite(dev.db) --> dev.db     dev-db (PGlite + socket :5433) -- owns --> dev.db
+worker -- new PGlite(dev.db) --> dev.db     web    -- pg wire --> dev-db
+                                             worker -- pg wire --> dev-db
+```
+
+### Changes (file by file)
+
+1. **`package.json`** — bump `@electric-sql/pglite` `^0.4.5` → `0.5.4` (pglite-socket pins it exactly; 0.5 added multi-connection support); add `@electric-sql/pglite-socket` (devDependency); add `pg` as a runtime dependency (currently only present transitively; needed for the worker's LISTEN client).
+2. **New `src/lib/schema.ts`** — extract the schema + seed SQL from `scripts/init-db.ts` into `ensureSchema(db: PGlite)` so both `init-db.ts` (one-shot file init) and `dev-db.ts` (server startup) share it.
+3. **New `scripts/dev-db.ts`** — dev-only owner process: `new PGlite(PGLITE_DATA_DIR ?? './dev.db')`; `ensureSchema`; `PGLiteSocketServer({ db, host: '127.0.0.1', port: PGLITE_PORT ?? 5433 })`. Refuse to start when `NODE_ENV === 'production'` or `APP_ENV === 'production'`. Graceful close on SIGINT/SIGTERM. Banner: `🗄️  PGlite socket server on 127.0.0.1:5433 (dev.db)`.
+4. **`scripts/init-db.ts`** — keep as one-shot file-mode init, now calling shared `ensureSchema` (no behavior change).
+5. **`.env` / `.env.example`** — dev `DATABASE_URL="postgres://127.0.0.1:5433/sorted"` with a comment that `bun run dev` starts the local DB server automatically; document `PGLITE_PORT` (default 5433) and `PGLITE_DATA_DIR` (default `./dev.db`).
+6. **`src/lib/db.ts`** — delete the PGlite branch, `getPGliteInstance`, and `global.pglite`. `executeQuery` becomes the single Postgres-wire path via Prisma `$queryRawUnsafe`. App code stops importing `@electric-sql/pglite` entirely (drop the `serverExternalPackages` entry for it if unused elsewhere).
+7. **`src/lib/queue/postgres-queue.ts`** — rewrite `subscribe()` on a `pg` client (`LISTEN job_queue`) against `DATABASE_URL`. NOTIFY path (already `pg_notify` wrapped in a `SELECT 1`) is unchanged. Keep the poll fallback on subscribe failure.
+8. **`src/app/api/items/route.ts`** — drop the stale `getPGliteInstance` import; audit and remove `runtime = 'nodejs'` PGlite-compatibility comments where nothing else requires Node.
+9. **`scripts/dev.ts`** — replace `initializeLocalDatabase()` (spawnSync `db:init`) with: spawn `scripts/dev-db.ts` as a managed child; readiness = TCP connect to `PGLITE_PORT` succeeds; then start next + worker as today; `cleanup()` kills dev-db too. Only spawn dev-db when `DATABASE_URL` points at `127.0.0.1`/`localhost` on `PGLITE_PORT`.
+10. **Remove the local inline-processing workaround** — audit enqueue paths (candidate import, extraction, outreach follow-ups) for the inline `processCandidateDocument`-style execution documented in the handoff; with a shared DB the worker processes everything, so the inline path is deleted.
+
+### How we run it
+
+- `bun run dev` → three managed processes: dev-db (:5433), next (:7070), worker. Readiness-gated; Ctrl-C kills all three.
+- `bun run dev:db` → DB server alone; debug via `psql postgres://127.0.0.1:5433/sorted` (real wire protocol).
+- `bun run db:init` still works for one-shot file init; the same schema now also applies at dev-db startup (idempotent `ensureSchema`).
+- Everything else unchanged: `db:generate`, `lint`, `build`, `test` (tests construct their own in-memory `new PGlite()` and are untouched).
+
+### Prod safety — this can never happen on real Postgres
+
+Structural, not behavioral:
+
+1. PGlite code lives only in `scripts/dev-db.ts` and `src/lib/schema.ts`, imported exclusively by `scripts/dev.ts` / `scripts/init-db.ts` — never by app routes, services, or worker code. The prod image never executes `scripts/` entrypoints (`start` = `next start`, `start:worker` = worker against real Postgres).
+2. `executeQuery` has exactly one path: Postgres wire. The app is indistinguishable from any Postgres client — file access is structurally impossible from app code, whatever `DATABASE_URL` resolves to.
+3. `dev-db.ts` refuses to start under `NODE_ENV=production` / `APP_ENV=production`; `scripts/dev.ts` only spawns it for a localhost socket URL.
+4. Existing env validation must reject `file:` `DATABASE_URL` outside development (verify the current rule; add if missing) — with the refactor the `file:` format is no longer a supported app value at all.
+
+### Risks and verification
+
+- **pglite 0.4.5 → 0.5.4**: app usage is only `query`/`exec`/`waitReady`; low risk. Verify: full `bun test` + demo flow.
+- **Prisma Rust engine vs faked auth handshake**: verify with `GET /api/ready` and one page load against the socket. Fallback: `executeQuery` Postgres path via `pg` Pool (`pg@8.20.0` + `@prisma/adapter-pg` already present).
+- **NOTIFY through the multiplexer**: verify the worker wakes without polling (log line + job latency). Fallback: keep 1s polling (today's prod behavior).
+- **Port collision**: `PGLITE_PORT` override + clear failure banner.
+
+### Acceptance criteria
+
+- `bun run dev` starts three processes; killing dev-db makes web/worker fail with connection errors (never file corruption).
+- Enqueue a job from the UI → worker claims it within ~1s via NOTIFY, no polling warnings.
+- `psql postgres://127.0.0.1:5433/sorted -c 'select 1'` succeeds.
+- All repository tests pass; `bun run build` passes; lint unchanged.
+- Prod: `bun run build && bun run start` with a real Postgres URL — no PGlite import in the build trace, worker processes jobs, no local store touched.
+- plan.md progress tracker updated after implementation.
 
 ## Slice 0 — Reframe the prototype and establish delivery foundations
 

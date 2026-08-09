@@ -204,6 +204,8 @@ async function main() {
       CREATE TABLE IF NOT EXISTS pipeline_handoff_snapshots (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, application_id TEXT NOT NULL, candidate_id TEXT NOT NULL, position_id TEXT NOT NULL, shortlist_decision_id TEXT NOT NULL, candidate_evaluation_id TEXT NOT NULL, rubric_id TEXT NOT NULL, rubric_version INTEGER NOT NULL, evidence_snapshot JSON NOT NULL, response_thread_id TEXT NOT NULL, rationale TEXT NOT NULL, advanced_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS pipeline_stage_transitions (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, application_id TEXT NOT NULL, from_stage TEXT NOT NULL, to_stage TEXT NOT NULL, actor_user_id TEXT NOT NULL, rationale TEXT NOT NULL, snapshot_id TEXT, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE INDEX IF NOT EXISTS pipeline_stage_transitions_org_app_idx ON pipeline_stage_transitions(organization_id,application_id,created_at);
+      CREATE TABLE IF NOT EXISTS rate_limit_events (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, actor_id TEXT NOT NULL, action TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE INDEX IF NOT EXISTS rate_limit_events_scope_idx ON rate_limit_events(organization_id,actor_id,action,created_at);
     `);
 
     console.log('⚙️  Creating Jobs table...');

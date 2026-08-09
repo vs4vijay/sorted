@@ -6,6 +6,11 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1).default('file:./dev.db'),
   APP_URL: z.url().default('http://localhost:7070'),
   SARVAM_API_KEY: z.string().min(20).optional(),
+  SARVAM_ENABLED: z.enum(['true', 'false']).default('false'),
+  EMAIL_DELIVERY_ENABLED: z.enum(['true', 'false']).default('false'),
+  MALWARE_SCANNER_ENABLED: z.enum(['true', 'false']).default('false'),
+  MALWARE_SCANNER_URL: z.url().optional(),
+  MALWARE_SCANNER_TOKEN: z.string().min(12).optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   LOCAL_AUTH_BYPASS: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 }).superRefine((env, context) => {
@@ -20,6 +25,6 @@ const envSchema = z.object({
 
 export type ServerEnv = z.infer<typeof envSchema>;
 
-export function parseServerEnv(input: NodeJS.ProcessEnv): ServerEnv {
+export function parseServerEnv(input: Partial<NodeJS.ProcessEnv>): ServerEnv {
   return envSchema.parse(input);
 }
