@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { OrganizationAccessRepository } from '@/features/organizations/repositories/organization-access-repository';
+import { getServerEnv } from '@/lib/env';
 import {
   roleCan,
   type OrganizationPermission,
@@ -29,14 +30,21 @@ export function hashSessionToken(token: string): string {
 }
 
 const resolveAccess = cache(async (): Promise<ResolvedOrganizationAccess | null> => {
+  const repository = new OrganizationAccessRepository();
+  // Read request cookies even in bypass mode so Next.js keeps every auth-aware
+  // route dynamic and evaluates the server-only flag at request time.
   const cookieStore = await cookies();
+  if (getServerEnv().LOCAL_AUTH_BYPASS) {
+    return repository.ensureLocalDevelopmentAccess();
+  }
+
   const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!sessionToken) return null;
 
   // The organization cookie is only a preference. The repository proves that
   // the session user is an active member before returning an organization.
   const preferredOrganizationSlug = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value;
-  return new OrganizationAccessRepository().findActiveAccessBySessionHash(
+  return repository.findActiveAccessBySessionHash(
     hashSessionToken(sessionToken),
     preferredOrganizationSlug,
   );
