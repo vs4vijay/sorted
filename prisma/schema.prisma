@@ -565,6 +565,96 @@ model EvidenceClaimCorrection {
   @@map("evidence_claim_corrections")
 }
 
+model MessageTemplate {
+  id String @id
+  organizationId String @map("organization_id")
+  name String
+  purpose String
+  subject String
+  body String
+  version Int @default(1)
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, purpose])
+  @@map("message_templates")
+}
+
+model OutreachThread {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  applicationId String? @map("application_id")
+  positionId String? @map("position_id")
+  purpose String
+  status String @default("draft")
+  requestedFields Json @default("[]") @map("requested_fields")
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@index([organizationId, candidateId, updatedAt])
+  @@map("outreach_threads")
+}
+
+model OutreachMessage {
+  id String @id
+  organizationId String @map("organization_id")
+  threadId String @map("thread_id")
+  direction String
+  subject String
+  body String
+  status String @default("draft")
+  approvalVersion Int @default(0) @map("approval_version")
+  approvedById String? @map("approved_by_id")
+  approvedAt DateTime? @map("approved_at")
+  provider String?
+  providerMessageId String? @map("provider_message_id")
+  idempotencyKey String @unique @map("idempotency_key")
+  sentAt DateTime? @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@index([organizationId, threadId, createdAt])
+  @@map("outreach_messages")
+}
+
+model CandidateResponse {
+  id String @id
+  organizationId String @map("organization_id")
+  threadId String @map("thread_id")
+  providerEventId String @map("provider_event_id")
+  body String
+  parsedSuggestions Json @default("[]") @map("parsed_suggestions")
+  receivedAt DateTime @default(now()) @map("received_at")
+  @@unique([organizationId, providerEventId])
+  @@index([organizationId, threadId, receivedAt])
+  @@map("candidate_responses")
+}
+
+model DeliveryEvent {
+  id String @id
+  organizationId String @map("organization_id")
+  threadId String @map("thread_id")
+  messageId String? @map("message_id")
+  providerEventId String @map("provider_event_id")
+  eventType String @map("event_type")
+  metadata Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([organizationId, providerEventId])
+  @@index([organizationId, threadId, createdAt])
+  @@map("delivery_events")
+}
+
+model OptOut {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  threadId String? @map("thread_id")
+  channel String
+  reason String?
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  @@unique([organizationId, candidateId, channel])
+  @@map("opt_outs")
+}
+
 model OrganizationMember {
   id             String           @id
   organizationId String           @map("organization_id")
