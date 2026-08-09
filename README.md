@@ -50,9 +50,11 @@ SARVAM_API_KEY="your-rotated-server-only-key"
 
 ## Deploy to Render
 
-The repo ships a [`render.yaml`](./render.yaml) blueprint: a Next.js web service, a background worker draining the Postgres job queue, and a managed PostgreSQL database with `DATABASE_URL` wired automatically. Bun runs natively on Render, so no Docker is required.
+The repo ships a [`render.yaml`](./render.yaml) blueprint: a Next.js web service, a background worker draining the Postgres job queue, and a managed PostgreSQL database with `DATABASE_URL` wired automatically. Bun runs natively on Render, so no Docker is required. **Full walkthrough, architecture, day-2 operations, and troubleshooting: [`DEPLOYMENT.md`](./DEPLOYMENT.md).**
 
-1. Push this repository to GitHub.
+Quick start:
+
+1. Push this repository to GitHub (`main` branch).
 2. In the [Render dashboard](https://dashboard.render.com), click **New → Blueprint**, and select the repo.
 3. Render provisions `sorted-web`, `sorted-worker`, and `sorted-db`, then deploys. The web service runs `prisma migrate deploy` in its predeploy step, so the schema is applied before traffic starts.
 
@@ -63,12 +65,12 @@ curl https://<your-app>.onrender.com/api/health
 curl https://<your-app>.onrender.com/api/ready
 ```
 
-Notes:
+Highlights (details in DEPLOYMENT.md):
 
-- The blueprint uses Render's free tier. The web service spins down after ~15 minutes idle (first request after wake-up is slow), and free PostgreSQL instances expire after 30 days — switch the database to `basic-256mb` and the web service to `starter` before then if the environment should persist.
+- The blueprint uses Render's free tier. The web service spins down after ~15 minutes idle, and free PostgreSQL instances expire after 30 days — upgrade before then if the environment should persist.
 - Production runs on `DATABASE_URL="postgresql://…"`; the app falls back to local PGlite only when the URL starts with `file:`.
 - Schema changes ship as new migrations under `prisma/migrations/` (`bun run db:migrate` locally, `prisma migrate deploy` on deploy). Never `db:push` against the production database.
-- When a Sarvam-backed slice ships, add `SARVAM_API_KEY` in the Render dashboard as a server-only environment variable — never with a `NEXT_PUBLIC_` prefix.
+- Set `APP_URL` to the onrender.com URL after the first deploy; add `SARVAM_API_KEY` as a server-only environment variable when a Sarvam-backed slice ships (never `NEXT_PUBLIC_`).
 
 ## Verification
 

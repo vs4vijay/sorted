@@ -196,20 +196,21 @@ Every vertical slice must include:
 
 ## Delivery progress tracker
 
-Last updated: 2026-08-09 (Slice 1 hackathon scope completed)
+Last updated: 2026-08-09 (Slice 2 end-to-end implementation completed)
 
 | Slice | Status | Evidence and remaining work |
 |---|---|---|
 | 0 — Reframe and foundations | Local implementation complete; deployment scaffolding in place, live deploy pending | Recruiting shell, synthetic fixtures, environment validation, health/readiness routes, redacted structured logging, and CI are implemented. `bun run lint` passes with 6 pre-existing warnings and `bun run build` passes. Playwright CLI verified Dashboard and Positions in Chrome with no console errors; captures: `.images/slice-0-dashboard-verified-2026-08-09.png` and `.images/slice-0-positions-verified-2026-08-09.png`. Render blueprint (`render.yaml`) defines web + worker services and managed Postgres with `DATABASE_URL` wiring; initial Prisma migration (`prisma/migrations/20260809000000_init`) applies via `prisma migrate deploy` in the web predeploy. Remaining: run the Render blueprint, verify `GET /api/health` and `GET /api/ready` on the live URL, and confirm backup behavior. |
 | 1 — Organization and access | Complete for hackathon scope | Added Zod access contracts, explicit role permissions, organization-scoped access resolution, password-protected workspace sign-up and sign-in, sign-out with database session revocation, invitation-based panel-member sign-up, and the responsive Hiring Panel access screen. Passwords use salted scrypt hashes; opaque session and invitation tokens are stored only as hashes. Invitation acceptance, membership/role mutations, and organization creation remain append-audited and organization-scoped. Technical reviewers do not see panel-management, export, or candidate-import actions. Fourteen tests, TypeScript, lint (0 errors; 6 pre-existing warnings), and the production build pass. Playwright CLI verified sign-up → sign-out → sign-in in Chrome with 0 console errors; capture: `.images/slice-1-sign-up-sign-in-verified-2026-08-09.png`. Earlier CLI evidence verifies invitation acceptance, role restriction, mobile layout, and cross-tenant denial. Account recovery and persistent browser test files were explicitly deferred to prioritize the hackathon demo flow. |
-| 2 — Position and rubric | Next | Implement the versioned position/JD/rubric schema and Sarvam-105B structuring adapter with deterministic simulated fallback. |
-| 3–11 | Not started | Follow the slice order below. |
+| 2 — Position and rubric | Complete for hackathon scope | Added versioned, organization-scoped position/JD/rubric/criterion/panel/provider-execution data; strict Zod contracts; Sarvam-105B JSON-schema adapter; deterministic simulated fallback; provider metadata/error recording; position creation and structured rubric review; balanced-weight enforcement; human-only approval; append audit events; and approved screening state. 17 tests pass, lint has 0 errors (6 pre-existing warnings), PGlite schema initialization and production build pass. Playwright CLI verified setup → pasted backend JD → simulated structured rubric → explicit administrator approval in Chrome with 0 console errors; capture: `.images/slice-2-position-rubric-approved-2026-08-09.png`. Live Sarvam execution requires `SARVAM_API_KEY` in the server environment and was not used for the saved browser capture. Deferred within the slice: JD file upload and a rich criterion editor; pasted JD and manual-draft paths cover the hackathon flow. |
+| 3 — Candidate ingestion | Next | Build private PDF/DOCX batch ingestion from synthetic `data/` CVs, document validation, resumable processing, normalized candidate records, and Sarvam-backed extraction with deterministic fixtures. |
+| 4–11 | Not started | Follow the slice order below. |
 
 ### Current handoff
 
-- Start Slice 2 with domain/Zod contracts, then add the matching organization-scoped SQL schema to both Prisma and `scripts/init-db.ts` before building the position workflow UI.
+- Start Slice 3 with candidate/document/source schemas and private storage boundaries, then add matching organization-scoped SQL to Prisma, the migration, and `scripts/init-db.ts` before wiring upload processing.
 - Preserve the existing Slice 0 fixture UI while replacing fixture-only organization access incrementally with organization-scoped services.
-- Use `SARVAM_API_KEY` supplied through the server environment. Slice 2 must retain a deterministic fake provider, normalize Sarvam output into versioned Sorted schemas, and label fallback output simulated.
+- Use `SARVAM_API_KEY` supplied through the server environment. Slice 3 must retain deterministic extraction fixtures, normalize all provider output into versioned Sorted schemas, and label fallback output simulated. Use synthetic CVs in `data/` only for local validation and never commit derived private content.
 - Do not mark Slice 0 fully complete until preview deployment, production PostgreSQL, and backup behavior have been verified in the target hosting environment.
 - Deploy the Render blueprint (New > Blueprint in the Render dashboard, select this repo), then verify health/readiness on the live URL and confirm the free-tier PostgreSQL backup settings. Free Postgres expires after 30 days; switch to `basic-256mb` before then to keep the environment.
 
