@@ -28,6 +28,15 @@ bun run db:init
 bun run dev:next
 ```
 
+The seed is synthetic, deterministic, and idempotent. To restore missing demo records while
+the local database server (or PostgreSQL) is running, use:
+
+```bash
+bun run db:seed
+```
+
+This project intentionally uses Bun only; pnpm/npm/yarn commands are not supported.
+
 ## Verify Installation
 
 1. **Homepage**: http://localhost:3000
