@@ -1,0 +1,61 @@
+# Render Blueprint — Sorted
+# Deploy from the Render dashboard: New > Blueprint, select this repo.
+# Creates: web service (Next.js), background worker (job queue), managed Postgres.
+# Bun runs natively on Render's Node/JS runtime (bun is preinstalled).
+
+services:
+  # Web app — Next.js production server
+  - type: web
+    name: sorted-web
+    branch: main # Render defaults to master when unset; this repo's default is main
+    runtime: node
+    plan: free # Free tier spins down after 15 min idle; upgrade to starter/standard for always-on
+    region: oregon
+    buildCommand: bun install --frozen-lockfile && bun run db:generate && bun run build
+    preDeployCommand: bun run db:deploy # prisma migrate deploy — idempotent, advisory-locked
+    startCommand: bun run start # next start, listens on $PORT (defaults to 7070 locally)
+    healthCheckPath: /api/ready # 503 while the database is unreachable — Render restarts instead of serving a broken instance
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sorted-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      # Set after first deploy: absolute origin for links/redirects (e.g. https://sorted-web.onrender.com).
+      # - key: APP_URL
+      #   sync: false
+      # Set when a Sarvam-backed slice ships (server-only; never NEXT_PUBLIC_):
+      # - key: SARVAM_API_KEY
+      #   sync: false
+
+  # Background worker — drains the Postgres job queue (LISTEN/NOTIFY + poll fallback)
+  - type: worker
+    name: sorted-worker
+    branch: main
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: bun install --frozen-lockfile && bun run db:generate
+    startCommand: bun run start:worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sorted-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+
+databases:
+  - name: sorted-db
+    plan: free # Free Postgres instances expire after 30 days; switch to basic-256mb to keep data
+    databaseName: sorted
+    user: sorted

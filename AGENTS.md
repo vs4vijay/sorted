@@ -166,7 +166,7 @@ The web app runs on `http://localhost:7070`.
 5. Keep real providers behind interfaces and retain deterministic fixtures for local demos and tests.
 6. Validate user input, uploaded/provider data, and normalized model output with Zod.
 7. Run targeted checks while iterating, then `bun run build` before handoff.
-8. Use Playwright CLI for UI validation and add Playwright coverage when behavior changes.
+8. Use Playwright CLI chrome browser only for UI validation and add Playwright coverage when behavior changes.
 9. Save intentional UI validation screenshots under `.images/` with descriptive phase-based names. Do not store sensitive data in captures.
 10. Update `plan.md` with completed work, verification evidence, open risks, and the precise next pick-up point.
 

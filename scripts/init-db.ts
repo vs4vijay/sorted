@@ -112,6 +112,19 @@ async function main() {
       CREATE INDEX IF NOT EXISTS audit_events_subject_idx ON audit_events (organization_id, subject_type, subject_id);
     `);
 
+    console.log('📋 Creating position and rubric tables...');
+    await pglite.exec(`
+      CREATE TABLE IF NOT EXISTS positions (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','rubric_review','screening','closed')), employment_type TEXT NOT NULL, location TEXT, workplace_preference TEXT, compensation_min INTEGER, compensation_max INTEGER, minimum_experience INTEGER, preferred_experience INTEGER, notice_period_days INTEGER, shift_travel TEXT, work_authorization TEXT, created_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE INDEX IF NOT EXISTS positions_org_created_idx ON positions(organization_id, created_at);
+      CREATE TABLE IF NOT EXISTS provider_executions (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, provider TEXT NOT NULL, operation TEXT NOT NULL, model TEXT NOT NULL, prompt_version TEXT NOT NULL, schema_version TEXT NOT NULL, provider_request_id TEXT, latency_ms INTEGER, status TEXT NOT NULL, normalized_error JSON, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE INDEX IF NOT EXISTS provider_executions_org_created_idx ON provider_executions(organization_id, created_at);
+      CREATE TABLE IF NOT EXISTS job_descriptions (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, position_id TEXT NOT NULL REFERENCES positions(id) ON DELETE CASCADE, version INTEGER NOT NULL, source_type TEXT NOT NULL, raw_text TEXT, structured_data JSON NOT NULL DEFAULT '{}'::JSON, extraction_mode TEXT NOT NULL, provider_execution_id TEXT, created_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(organization_id, position_id, version));
+      CREATE TABLE IF NOT EXISTS evaluation_rubrics (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, position_id TEXT NOT NULL REFERENCES positions(id) ON DELETE CASCADE, version INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','approved','superseded')), approved_by_id TEXT, approved_at TIMESTAMP, created_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(organization_id, position_id, version));
+      CREATE TABLE IF NOT EXISTS rubric_criteria (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, rubric_id TEXT NOT NULL REFERENCES evaluation_rubrics(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT NOT NULL, criterion_type TEXT NOT NULL, classification TEXT NOT NULL CHECK(classification IN ('must_have','preferred','logistics','informational')), weight INTEGER NOT NULL CHECK(weight BETWEEN 0 AND 100), evidence_expectations TEXT NOT NULL, display_order INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS rubric_criteria_org_rubric_idx ON rubric_criteria(organization_id, rubric_id, display_order);
+      CREATE TABLE IF NOT EXISTS hiring_panel_members (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, position_id TEXT NOT NULL REFERENCES positions(id) ON DELETE CASCADE, organization_member_id TEXT NOT NULL REFERENCES organization_members(id) ON DELETE CASCADE, panel_role TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(organization_id, position_id, organization_member_id));
+    `);
+
     console.log('⚙️  Creating Jobs table...');
 
     await pglite.exec(`

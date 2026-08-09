@@ -3,10 +3,10 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { OrganizationAccessRepository } from '@/features/organizations/repositories/organization-access-repository';
-import { CreateInvitationInputSchema, UpdateMemberRoleInputSchema } from '@/features/organizations/schemas/access';
+import { CreateInvitationInputSchema, RevokeInvitationInputSchema, UpdateMemberRoleInputSchema } from '@/features/organizations/schemas/access';
 import { AccessError, requireCurrentAccess } from '@/lib/auth/session';
 
-export type MemberActionState = { status?: 'success' | 'error'; message?: string; errors?: Record<string, string[]> };
+export type MemberActionState = { status?: 'success' | 'error'; message?: string; acceptanceUrl?: string; errors?: Record<string, string[]> };
 
 export async function inviteMember(_: MemberActionState, formData: FormData): Promise<MemberActionState> {
   try {
@@ -21,11 +21,19 @@ export async function inviteMember(_: MemberActionState, formData: FormData): Pr
     });
     if (!created) return { status: 'error', message: 'A current invitation already exists for this email.' };
     revalidatePath('/settings/members');
-    return { status: 'success', message: `Invitation prepared for ${parsed.data.email}. Delivery is simulated in this preview.` };
+    return { status: 'success', message: `Invitation prepared for ${parsed.data.email}. Delivery is simulated in this preview.`, acceptanceUrl: `/invitations/${token}` };
   } catch (error) {
     if (error instanceof AccessError) return { status: 'error', message: error.message };
     return { status: 'error', message: 'A pending invitation already exists for this email, or the invitation could not be saved.' };
   }
+}
+
+export async function revokeInvitation(formData: FormData): Promise<void> {
+  const access = await requireCurrentAccess('members:manage');
+  const parsed = RevokeInvitationInputSchema.parse(Object.fromEntries(formData));
+  await new OrganizationAccessRepository().revokeInvitation({ invitationId: parsed.invitationId,
+    organizationId: access.organization.id, actorUserId: access.userId, auditEventId: randomUUID() });
+  revalidatePath('/settings/members');
 }
 
 export async function updateMemberRole(formData: FormData): Promise<void> {

@@ -1,9 +1,11 @@
 import { executeQuery } from '@/lib/db';
 import {
   InvitationViewSchema,
+  InvitationAcceptanceViewSchema,
   OrganizationMemberViewSchema,
   ResolvedOrganizationAccessSchema,
   type InvitationView,
+  type InvitationAcceptanceView,
   type OrganizationMemberView,
   type OrganizationRole,
   type ResolvedOrganizationAccess,
@@ -89,14 +91,14 @@ export class OrganizationAccessRepository {
     });
   }
 
-  async createFirstOrganization(input: { userId: string; name: string; email: string; organizationId: string; organizationName: string; organizationSlug: string; membershipId: string; auditEventId: string; timezone: string; defaultLocale: string }): Promise<void> {
+  async createFirstOrganization(input: { userId: string; name: string; email: string; passwordHash: string; organizationId: string; organizationName: string; organizationSlug: string; membershipId: string; auditEventId: string; timezone: string; defaultLocale: string }): Promise<void> {
     await this.query(
-      `WITH created_user AS (INSERT INTO users (id, email, name) VALUES ($1, $2, $3) RETURNING id),
+      `WITH created_user AS (INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $11) RETURNING id),
       created_organization AS (INSERT INTO organizations (id, name, slug, timezone, default_locale) SELECT $4, $5, $6, $7, $8 FROM created_user RETURNING id),
       created_membership AS (INSERT INTO organization_members (id, organization_id, user_id, role) SELECT $9, created_organization.id, created_user.id, 'admin' FROM created_organization CROSS JOIN created_user RETURNING id)
       INSERT INTO audit_events (id, organization_id, actor_user_id, action, subject_type, subject_id, metadata)
       SELECT $10, $4, $1, 'organization.created', 'organization', $4, json_build_object('role', 'admin') FROM created_membership`,
-      [input.userId, input.email, input.name, input.organizationId, input.organizationName, input.organizationSlug, input.timezone, input.defaultLocale, input.membershipId, input.auditEventId],
+      [input.userId, input.email, input.name, input.organizationId, input.organizationName, input.organizationSlug, input.timezone, input.defaultLocale, input.membershipId, input.auditEventId, input.passwordHash],
     );
   }
 
@@ -162,6 +164,71 @@ export class OrganizationAccessRepository {
       [input.id, input.organizationId, input.email, input.role, input.tokenHash, input.invitedById, input.expiresAt, input.auditEventId],
     ) as { created: boolean }[];
     return rows[0]?.created ?? false;
+  }
+
+  async revokeInvitation(input: { invitationId: string; organizationId: string; actorUserId: string; auditEventId: string }): Promise<boolean> {
+    const rows = await this.query(
+      `WITH revoked AS (
+        UPDATE invitations SET status = 'revoked', updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND organization_id = $2 AND status = 'pending' AND expires_at > CURRENT_TIMESTAMP
+        RETURNING id, email, role
+      ), audited AS (
+        INSERT INTO audit_events (id, organization_id, actor_user_id, action, subject_type, subject_id, metadata)
+        SELECT $4, $2, $3, 'invitation.revoked', 'invitation', id, json_build_object('email', email, 'role', role) FROM revoked
+      ) SELECT EXISTS(SELECT 1 FROM revoked) AS revoked`,
+      [input.invitationId, input.organizationId, input.actorUserId, input.auditEventId],
+    ) as { revoked: boolean }[];
+    return rows[0]?.revoked ?? false;
+  }
+
+  async findInvitationByTokenHash(tokenHash: string): Promise<InvitationAcceptanceView | null> {
+    const rows = await this.query(
+      `SELECT invitations.id AS invitation_id, invitations.organization_id,
+        organizations.name AS organization_name, organizations.slug AS organization_slug,
+        invitations.email, invitations.role,
+        CASE WHEN invitations.status = 'pending' AND invitations.expires_at <= CURRENT_TIMESTAMP THEN 'expired' ELSE invitations.status END AS status,
+        invitations.expires_at
+      FROM invitations INNER JOIN organizations ON organizations.id = invitations.organization_id
+      WHERE invitations.token_hash = $1 AND organizations.status = 'active' LIMIT 1`, [tokenHash],
+    ) as Record<string, unknown>[];
+    const row = rows[0];
+    if (!row) return null;
+    return InvitationAcceptanceViewSchema.parse({ invitationId: row.invitation_id, organizationId: row.organization_id,
+      organizationName: row.organization_name, organizationSlug: row.organization_slug, email: row.email,
+      role: row.role, status: row.status, expiresAt: row.expires_at });
+  }
+
+  async acceptInvitation(input: { tokenHash: string; name: string; passwordHash: string; userId: string; membershipId: string; sessionId: string; sessionTokenHash: string; sessionExpiresAt: Date; auditEventId: string }): Promise<{ organizationSlug: string } | null> {
+    const rows = await this.query(
+      `WITH eligible AS (
+        SELECT invitations.id, invitations.organization_id, invitations.email, invitations.role, organizations.slug
+        FROM invitations INNER JOIN organizations ON organizations.id = invitations.organization_id
+        WHERE invitations.token_hash = $1 AND invitations.status = 'pending'
+          AND invitations.expires_at > CURRENT_TIMESTAMP AND organizations.status = 'active' FOR UPDATE OF invitations
+      ), ensured_user AS (
+        INSERT INTO users (id, email, name, password_hash) SELECT $2, LOWER(email), $3, $9 FROM eligible
+        ON CONFLICT (email) DO UPDATE SET name = CASE WHEN users.name = '' THEN EXCLUDED.name ELSE users.name END,
+          password_hash = COALESCE(users.password_hash, EXCLUDED.password_hash) RETURNING id
+      ), created_membership AS (
+        INSERT INTO organization_members (id, organization_id, user_id, role)
+        SELECT $4, eligible.organization_id, ensured_user.id, eligible.role FROM eligible CROSS JOIN ensured_user
+        ON CONFLICT (organization_id, user_id) DO NOTHING RETURNING id
+      ), accepted AS (
+        UPDATE invitations SET status = 'accepted', accepted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id IN (SELECT id FROM eligible) RETURNING id, organization_id
+      ), created_session AS (
+        INSERT INTO sessions (id, user_id, token_hash, expires_at)
+        SELECT $5, ensured_user.id, $6, $7 FROM ensured_user WHERE EXISTS (SELECT 1 FROM accepted) RETURNING id
+      ), audited AS (
+        INSERT INTO audit_events (id, organization_id, actor_user_id, action, subject_type, subject_id, metadata)
+        SELECT $8, accepted.organization_id, ensured_user.id, 'invitation.accepted', 'invitation', accepted.id,
+          json_build_object('membership_created', EXISTS(SELECT 1 FROM created_membership))
+        FROM accepted CROSS JOIN ensured_user WHERE EXISTS (SELECT 1 FROM created_session)
+      ) SELECT eligible.slug AS organization_slug FROM eligible
+      WHERE EXISTS (SELECT 1 FROM accepted) AND EXISTS (SELECT 1 FROM created_session)`,
+      [input.tokenHash, input.userId, input.name, input.membershipId, input.sessionId, input.sessionTokenHash, input.sessionExpiresAt, input.auditEventId, input.passwordHash],
+    ) as { organization_slug: string }[];
+    return rows[0] ? { organizationSlug: rows[0].organization_slug } : null;
   }
 
   async updateMemberRole(input: { organizationId: string; membershipId: string; actorUserId: string; role: OrganizationRole; auditEventId: string }): Promise<boolean> {

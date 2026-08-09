@@ -87,8 +87,131 @@ model Organization {
   memberships   OrganizationMember[]
   invitations   Invitation[]
   auditEvents   AuditEvent[]
+  positions     Position[]
 
   @@map("organizations")
+}
+
+enum PositionStatus {
+  draft
+  rubric_review
+  screening
+  closed
+}
+enum CriterionClassification {
+  must_have
+  preferred
+  logistics
+  informational
+}
+enum RubricStatus {
+  draft
+  approved
+  superseded
+}
+
+model Position {
+  id String @id
+  organizationId String @map("organization_id")
+  title String
+  status PositionStatus @default(draft)
+  employmentType String @map("employment_type")
+  location String?
+  workplacePreference String? @map("workplace_preference")
+  compensationMin Int? @map("compensation_min")
+  compensationMax Int? @map("compensation_max")
+  minimumExperience Int? @map("minimum_experience")
+  preferredExperience Int? @map("preferred_experience")
+  noticePeriodDays Int? @map("notice_period_days")
+  shiftTravel String? @map("shift_travel")
+  workAuthorization String? @map("work_authorization")
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobDescriptions JobDescription[]
+  rubrics EvaluationRubric[]
+  panel HiringPanelMember[]
+  @@index([organizationId, createdAt])
+  @@map("positions")
+}
+
+model JobDescription {
+  id String @id
+  organizationId String @map("organization_id")
+  positionId String @map("position_id")
+  version Int
+  sourceType String @map("source_type")
+  rawText String? @map("raw_text")
+  structuredData Json @default("{}") @map("structured_data")
+  extractionMode String @map("extraction_mode")
+  providerExecutionId String? @map("provider_execution_id")
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  @@unique([organizationId, positionId, version])
+  @@map("job_descriptions")
+}
+
+model EvaluationRubric {
+  id String @id
+  organizationId String @map("organization_id")
+  positionId String @map("position_id")
+  version Int
+  status RubricStatus @default(draft)
+  approvedById String? @map("approved_by_id")
+  approvedAt DateTime? @map("approved_at")
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  criteria RubricCriterion[]
+  @@unique([organizationId, positionId, version])
+  @@map("evaluation_rubrics")
+}
+
+model RubricCriterion {
+  id String @id
+  organizationId String @map("organization_id")
+  rubricId String @map("rubric_id")
+  name String
+  description String
+  criterionType String @map("criterion_type")
+  classification CriterionClassification
+  weight Int
+  evidenceExpectations String @map("evidence_expectations")
+  displayOrder Int @map("display_order")
+  rubric EvaluationRubric @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  @@index([organizationId, rubricId, displayOrder])
+  @@map("rubric_criteria")
+}
+
+model HiringPanelMember {
+  id String @id
+  organizationId String @map("organization_id")
+  positionId String @map("position_id")
+  organizationMemberId String @map("organization_member_id")
+  panelRole String @map("panel_role")
+  createdAt DateTime @default(now()) @map("created_at")
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  @@unique([organizationId, positionId, organizationMemberId])
+  @@map("hiring_panel_members")
+}
+
+model ProviderExecution {
+  id String @id
+  organizationId String @map("organization_id")
+  provider String
+  operation String
+  model String
+  promptVersion String @map("prompt_version")
+  schemaVersion String @map("schema_version")
+  providerRequestId String? @map("provider_request_id")
+  latencyMs Int? @map("latency_ms")
+  status String
+  normalizedError Json? @map("normalized_error")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, createdAt])
+  @@map("provider_executions")
 }
 
 model OrganizationMember {
