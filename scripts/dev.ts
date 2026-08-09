@@ -1,119 +1,85 @@
 #!/usr/bin/env bun
 
-/**
- * Development runner
- * Starts both Next.js dev server and Graphile Worker concurrently
- */
-
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import { connect } from 'net';
 
 const processes: ChildProcessWithoutNullStreams[] = [];
-
-// Color codes for console output
-const colors = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  blue: '\x1b[34m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  red: '\x1b[31m',
-};
+const colors = { reset: '\x1b[0m', bright: '\x1b[1m', blue: '\x1b[34m', green: '\x1b[32m', yellow: '\x1b[33m', red: '\x1b[31m' };
+let shuttingDown = false;
 
 function log(prefix: string, color: string, message: string) {
   console.log(`${color}${colors.bright}[${prefix}]${colors.reset} ${message}`);
 }
 
-function initializeLocalDatabase() {
-  const databaseUrl = process.env.DATABASE_URL || 'file:./dev.db';
-  if (!databaseUrl.startsWith('file:')) return;
-  log('DB', colors.green, 'Checking local PGlite schema...');
-  const result = spawnSync('bun', ['run', 'db:init'], { stdio: 'inherit', env: process.env });
-  if (result.status !== 0) {
-    log('DB', colors.red, 'Local database initialization failed. Stop other Sorted dev processes and retry.');
-    process.exit(result.status ?? 1);
-  }
+function localDatabaseConfig() {
+  const port = Number(process.env.PGLITE_PORT || 5433);
+  const configured = process.env.DATABASE_URL || 'postgresql://127.0.0.1:5433/sorted';
+  const legacyFileUrl = configured.startsWith('file:');
+  const url = legacyFileUrl ? new URL(`postgresql://127.0.0.1:${port}/sorted`) : new URL(configured);
+  const local = legacyFileUrl || (['127.0.0.1', 'localhost'].includes(url.hostname) && Number(url.port || 5432) === port);
+  return { local, port, databaseUrl: local ? `postgresql://127.0.0.1:${port}/sorted` : configured };
 }
 
-// Start Next.js dev server
-function startNextJS() {
-  log('NEXT', colors.blue, 'Starting Next.js dev server...');
-
-  const next = spawn('bun', ['next', 'dev'], {
-    stdio: 'pipe',
-    shell: true,
-  });
-
-  next.stdout.on('data', (data) => {
-    const message = data.toString().trim();
-    if (message) log('NEXT', colors.blue, message);
-  });
-
-  next.stderr.on('data', (data) => {
-    const message = data.toString().trim();
-    if (message) log('NEXT', colors.blue, message);
-  });
-
-  next.on('close', (code) => {
-    log('NEXT', colors.red, `Process exited with code ${code}`);
-    cleanup();
-  });
-
-  processes.push(next);
-}
-
-// Start Graphile Worker
-function startWorker() {
-  log('WORKER', colors.green, 'Starting Graphile Worker...');
-
-  const worker = spawn('bun', ['--conditions=react-server', 'run', 'src/lib/worker.ts'], {
-    stdio: 'pipe',
-    shell: true,
-  });
-
-  worker.stdout.on('data', (data) => {
-    const message = data.toString().trim();
-    if (message) log('WORKER', colors.green, message);
-  });
-
-  worker.stderr.on('data', (data) => {
-    const message = data.toString().trim();
-    if (message) log('WORKER', colors.green, message);
-  });
-
-  worker.on('close', (code) => {
-    log('WORKER', colors.red, `Process exited with code ${code}`);
-    cleanup();
-  });
-
-  processes.push(worker);
-}
-
-// Cleanup on exit
-function cleanup() {
-  log('DEV', colors.yellow, 'Shutting down...');
-
-  processes.forEach((proc) => {
-    if (proc && !proc.killed) {
-      proc.kill();
+function pipeProcess(prefix: string, color: string, command: string, args: string[], env: NodeJS.ProcessEnv) {
+  const child = spawn(command, args, { stdio: 'pipe', env });
+  child.stdout.on('data', (data) => { const message = data.toString().trim(); if (message) log(prefix, color, message); });
+  child.stderr.on('data', (data) => { const message = data.toString().trim(); if (message) log(prefix, color, message); });
+  child.on('close', (code) => {
+    if (!shuttingDown) {
+      log(prefix, colors.red, `Process exited with code ${code}`);
+      cleanup(code || 1);
     }
   });
-
-  process.exit(0);
+  processes.push(child);
+  return child;
 }
 
-// Handle graceful shutdown
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
+async function portIsOpen(port: number) {
+  return await new Promise<boolean>((resolve) => {
+      const socket = connect({ host: '127.0.0.1', port });
+      socket.once('connect', () => { socket.destroy(); resolve(true); });
+      socket.once('error', () => resolve(false));
+  });
+}
 
-// Start all processes
-log('DEV', colors.yellow, 'Starting development environment...');
-initializeLocalDatabase();
-startNextJS();
+async function waitForPort(port: number, timeoutMs = 30_000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (await portIsOpen(port)) return;
+    await Bun.sleep(100);
+  }
+  throw new Error(`Local database did not become ready on port ${port}.`);
+}
 
-// Start the worker after Next has initialized its development runtime.
-setTimeout(() => {
-  startWorker();
-}, 2000);
+function cleanup(code = 0) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log('DEV', colors.yellow, 'Shutting down...');
+  for (const process of processes) if (!process.killed) process.kill('SIGTERM');
+  setTimeout(() => process.exit(code), 250).unref();
+}
 
-// Keep the process running
-process.stdin.resume();
+process.on('SIGINT', () => cleanup());
+process.on('SIGTERM', () => cleanup());
+
+async function main() {
+  const database = localDatabaseConfig();
+  const childEnv = { ...process.env, DATABASE_URL: database.databaseUrl };
+  log('DEV', colors.yellow, 'Starting development environment...');
+  if (database.local) {
+    if (await portIsOpen(database.port)) {
+      throw new Error(`Port ${database.port} is already in use. Set PGLITE_PORT and update the local DATABASE_URL to the same port.`);
+    }
+    log('DB', colors.green, 'Starting single-owner PGlite database...');
+    pipeProcess('DB', colors.green, 'bun', ['run', 'scripts/dev-db.ts'], childEnv);
+    await waitForPort(database.port);
+  }
+  pipeProcess('NEXT', colors.blue, 'bun', ['next', 'dev', '-p', process.env.PORT || '7070'], childEnv);
+  pipeProcess('WORKER', colors.green, 'bun', ['--conditions=react-server', 'run', 'src/lib/worker.ts'], childEnv);
+  process.stdin.resume();
+}
+
+main().catch((error) => {
+  log('DEV', colors.red, error instanceof Error ? error.message : 'Development startup failed.');
+  cleanup(1);
+});

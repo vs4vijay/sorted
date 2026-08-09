@@ -5,8 +5,6 @@ import { CandidateIngestionRepository } from '@/features/candidates/repositories
 import { validateCandidateDocument } from '@/features/candidates/services/document-validation';
 import { privateDocumentStorage } from '@/features/candidates/services/private-document-storage';
 import { enqueueJob } from '@/lib/worker';
-import { queue } from '@/lib/queue/postgres-queue';
-import { processCandidateDocument } from '@/workers/tasks/extract-cv-document';
 import { EvidenceClaimInputSchema, EvidenceReviewInputSchema } from '@/features/candidates/schemas/evidence-profile';
 import { EvidenceProfileRepository } from '@/features/candidates/repositories/evidence-profile-repository';
 import { MatchCandidateInputSchema, validateCriterionCoverage } from '@/features/evaluations/schemas/evaluation';
@@ -24,7 +22,7 @@ async function scanAndQueueDocument(input:{repo:CandidateIngestionRepository;org
   const status=scan.verdict==='clean'?(scan.simulated?'clean_simulated':'clean'):scan.verdict==='infected'?'quarantined':'scan_failed';
   await input.repo.recordMalwareScan({org:input.organizationId,documentId:input.documentId,actorId:input.actorId,status,provider:scan.provider,engineVersion:scan.engineVersion,requestId:scan.requestId,error:scan.verdict==='infected'?`Threat detected: ${scan.threatName}`:scan.verdict==='error'?scan.normalizedError:undefined});
   if(scan.verdict!=='clean')return false;
-  const job=await enqueueJob('extract-cv-document',{organizationId:input.organizationId,documentId:input.documentId},{jobKey:`extract-cv:${input.organizationId}:${input.checksum}`,queue:'candidate-ingestion',maxAttempts:3});if((process.env.DATABASE_URL??'file:').startsWith('file:')){await processCandidateDocument({organizationId:input.organizationId,documentId:input.documentId});await queue.completeJob(job.id)}return true;
+  await enqueueJob('extract-cv-document',{organizationId:input.organizationId,documentId:input.documentId},{jobKey:`extract-cv:${input.organizationId}:${input.checksum}`,queue:'candidate-ingestion',maxAttempts:3});return true;
 }
 
 export type ImportState={error?:string;message?:string;skipped?:string[]};

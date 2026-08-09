@@ -8,23 +8,7 @@ function generateCuid() {
   return `c${timestamp}${randomStr}`;
 }
 
-async function main() {
-  console.log('🗄️  Initializing PGlite database...');
-
-  const databaseUrl = process.env.DATABASE_URL || 'file:./dev.db';
-
-  if (!databaseUrl.startsWith('file:')) {
-    console.error('❌ This script is for PGlite initialization only.');
-    console.error('   For PostgreSQL, use: bun run db:migrate');
-    process.exit(1);
-  }
-
-  const dbPath = databaseUrl.replace('file:', '');
-
-  const pglite = new PGlite(dbPath);
-  await pglite.waitReady;
-
-  try {
+export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } = {}) {
     console.log('📋 Creating tables...');
 
     await pglite.exec(`
@@ -237,6 +221,8 @@ async function main() {
 
     console.log('✅ Database schema created successfully');
 
+    if (!options.seed) return;
+
     console.log('🌱 Seeding database...');
 
     await pglite.exec('DELETE FROM items;');
@@ -260,12 +246,27 @@ async function main() {
     console.log('  2. Visit: http://localhost:7070');
     console.log('  3. Check jobs: http://localhost:7070/jobs');
 
+}
+
+async function main() {
+  console.log('🗄️  Initializing PGlite database...');
+  const databaseUrl = process.env.DATABASE_URL || 'file:./dev.db';
+  if (!databaseUrl.startsWith('file:')) {
+    throw new Error('This script only initializes a file-backed PGlite database. Use bun run db:migrate for PostgreSQL.');
+  }
+
+  const pglite = new PGlite(databaseUrl.replace('file:', ''));
+  await pglite.waitReady;
+  try {
+    await ensureSchema(pglite, { seed: true });
+  } finally {
     await pglite.close();
-  } catch (error) {
-    console.error('❌ Database initialization failed:', error);
-    await pglite.close();
-    process.exit(1);
   }
 }
 
-main();
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error('❌ Database initialization failed:', error);
+    process.exit(1);
+  });
+}
