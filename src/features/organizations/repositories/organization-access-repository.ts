@@ -91,14 +91,69 @@ export class OrganizationAccessRepository {
     });
   }
 
-  async createFirstOrganization(input: { userId: string; name: string; email: string; passwordHash: string; organizationId: string; organizationName: string; organizationSlug: string; membershipId: string; auditEventId: string; timezone: string; defaultLocale: string }): Promise<void> {
+  async findSetupConflicts(email: string, organizationSlug: string): Promise<{ emailTaken: boolean; slugTaken: boolean }> {
+    const rows = await this.query(
+      `SELECT
+        EXISTS(SELECT 1 FROM users WHERE LOWER(email) = LOWER($1)) AS email_taken,
+        EXISTS(SELECT 1 FROM organizations WHERE slug = $2) AS slug_taken`,
+      [email, organizationSlug],
+    ) as { email_taken: boolean; slug_taken: boolean }[];
+    const row = rows[0];
+    return {
+      emailTaken: Boolean(row?.email_taken),
+      slugTaken: Boolean(row?.slug_taken),
+    };
+  }
+
+  async createFirstOrganizationWithSession(input: {
+    userId: string;
+    name: string;
+    email: string;
+    passwordHash: string;
+    organizationId: string;
+    organizationName: string;
+    organizationSlug: string;
+    membershipId: string;
+    auditEventId: string;
+    timezone: string;
+    defaultLocale: string;
+    sessionId: string;
+    sessionTokenHash: string;
+    sessionExpiresAt: Date;
+  }): Promise<void> {
     await this.query(
-      `WITH created_user AS (INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $11) RETURNING id),
-      created_organization AS (INSERT INTO organizations (id, name, slug, timezone, default_locale) SELECT $4, $5, $6, $7, $8 FROM created_user RETURNING id),
-      created_membership AS (INSERT INTO organization_members (id, organization_id, user_id, role) SELECT $9, created_organization.id, created_user.id, 'admin' FROM created_organization CROSS JOIN created_user RETURNING id)
-      INSERT INTO audit_events (id, organization_id, actor_user_id, action, subject_type, subject_id, metadata)
-      SELECT $10, $4, $1, 'organization.created', 'organization', $4, json_build_object('role', 'admin') FROM created_membership`,
-      [input.userId, input.email, input.name, input.organizationId, input.organizationName, input.organizationSlug, input.timezone, input.defaultLocale, input.membershipId, input.auditEventId, input.passwordHash],
+      `WITH created_user AS (
+        INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $11) RETURNING id
+      ), created_organization AS (
+        INSERT INTO organizations (id, name, slug, timezone, default_locale)
+        SELECT $4, $5, $6, $7, $8 FROM created_user RETURNING id
+      ), created_membership AS (
+        INSERT INTO organization_members (id, organization_id, user_id, role)
+        SELECT $9, created_organization.id, created_user.id, 'admin'
+        FROM created_organization CROSS JOIN created_user RETURNING id
+      ), created_audit AS (
+        INSERT INTO audit_events (id, organization_id, actor_user_id, action, subject_type, subject_id, metadata)
+        SELECT $10, $4, $1, 'organization.created', 'organization', $4, json_build_object('role', 'admin')
+        FROM created_membership RETURNING id
+      )
+      INSERT INTO sessions (id, user_id, token_hash, expires_at)
+      SELECT $12, created_user.id, $13, $14 FROM created_user CROSS JOIN created_audit`,
+      [
+        input.userId,
+        input.email,
+        input.name,
+        input.organizationId,
+        input.organizationName,
+        input.organizationSlug,
+        input.timezone,
+        input.defaultLocale,
+        input.membershipId,
+        input.auditEventId,
+        input.passwordHash,
+        input.sessionId,
+        input.sessionTokenHash,
+        input.sessionExpiresAt,
+      ],
     );
   }
 

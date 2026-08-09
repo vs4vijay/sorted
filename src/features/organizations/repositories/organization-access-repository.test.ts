@@ -99,4 +99,54 @@ describe('OrganizationAccessRepository', () => {
     expect(capturedSql).toContain('ON CONFLICT (organization_id, user_id) DO NOTHING');
     expect(capturedParams).not.toContain('org-1');
   });
+
+  test('checks email and slug collisions in one setup preflight query', async () => {
+    let capturedSql = '';
+    let capturedParams: unknown[] = [];
+    const repository = new OrganizationAccessRepository(async (sql, params) => {
+      capturedSql = sql;
+      capturedParams = params ?? [];
+      return [{ email_taken: true, slug_taken: false }];
+    });
+    expect(await repository.findSetupConflicts('admin@acme.test', 'acme-india')).toEqual({
+      emailTaken: true,
+      slugTaken: false,
+    });
+    expect(capturedSql).toContain('EXISTS(SELECT 1 FROM users WHERE LOWER(email) = LOWER($1))');
+    expect(capturedSql).toContain('EXISTS(SELECT 1 FROM organizations WHERE slug = $2)');
+    expect(capturedParams).toEqual(['admin@acme.test', 'acme-india']);
+  });
+
+  test('creates the first organization and session in one statement', async () => {
+    let capturedSql = '';
+    let capturedParams: unknown[] = [];
+    const repository = new OrganizationAccessRepository(async (sql, params) => {
+      capturedSql = sql;
+      capturedParams = params ?? [];
+      return [];
+    });
+    await repository.createFirstOrganizationWithSession({
+      userId: 'user-1',
+      name: 'Asha Admin',
+      email: 'asha@acme.test',
+      passwordHash: 'hash',
+      organizationId: 'org-1',
+      organizationName: 'Acme India',
+      organizationSlug: 'acme-india',
+      membershipId: 'member-1',
+      auditEventId: 'audit-1',
+      timezone: 'Asia/Kolkata',
+      defaultLocale: 'en-IN',
+      sessionId: 'session-1',
+      sessionTokenHash: 'session-hash',
+      sessionExpiresAt: new Date('2026-08-23'),
+    });
+    expect(capturedSql).toContain('INSERT INTO users');
+    expect(capturedSql).toContain('INSERT INTO organizations');
+    expect(capturedSql).toContain('INSERT INTO organization_members');
+    expect(capturedSql).toContain('INSERT INTO audit_events');
+    expect(capturedSql).toContain('INSERT INTO sessions');
+    expect(capturedParams).toContain('session-1');
+    expect(capturedParams).toContain('session-hash');
+  });
 });
