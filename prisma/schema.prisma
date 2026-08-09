@@ -88,6 +88,10 @@ model Organization {
   invitations   Invitation[]
   auditEvents   AuditEvent[]
   positions     Position[]
+  candidates    Candidate[]
+  candidateSources CandidateSource[]
+  candidateDocuments CandidateDocument[]
+  ingestionRuns IngestionRun[]
 
   @@map("organizations")
 }
@@ -212,6 +216,258 @@ model ProviderExecution {
   createdAt DateTime @default(now()) @map("created_at")
   @@index([organizationId, createdAt])
   @@map("provider_executions")
+}
+
+enum DocumentProcessingStatus {
+  uploaded
+  scanning
+  extracting
+  parsed
+  needs_review
+  failed
+}
+enum DuplicateClassification {
+  same_candidate
+  possible_duplicate
+  distinct
+}
+
+model Candidate {
+  id String @id
+  organizationId String @map("organization_id")
+  displayName String @map("display_name")
+  headline String?
+  location String?
+  profileStatus String @default("unreviewed") @map("profile_status")
+  mergedIntoId String? @map("merged_into_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sources CandidateSource[]
+  identities CandidateIdentity[]
+  links ExternalProfileLink[]
+  applications Application[]
+  evaluations CandidateEvaluation[]
+  @@index([organizationId, createdAt])
+  @@map("candidates")
+}
+
+enum EvaluationState {
+  queued
+  evaluated
+  stale
+  failed
+}
+enum EvaluationRecommendation {
+  strong_review
+  review
+  needs_information
+  low_match
+}
+enum CriterionRating {
+  strong
+  meets
+  partial
+  missing
+  contradicted
+}
+
+model CandidateEvaluation {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  positionId String @map("position_id")
+  rubricId String @map("rubric_id")
+  rubricVersion Int @map("rubric_version")
+  state EvaluationState
+  roleFit Int? @map("role_fit")
+  evidenceConfidence Int? @map("evidence_confidence")
+  recommendation EvaluationRecommendation?
+  evidenceSnapshot Json @map("evidence_snapshot")
+  providerExecutionId String? @map("provider_execution_id")
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  criteria CriterionEvaluation[]
+  @@index([organizationId, positionId, createdAt])
+  @@index([organizationId, candidateId, createdAt])
+  @@map("candidate_evaluations")
+}
+
+model CriterionEvaluation {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateEvaluationId String @map("candidate_evaluation_id")
+  criterionId String @map("criterion_id")
+  rating CriterionRating
+  score Int
+  evidenceConfidence Int @map("evidence_confidence")
+  reasoning String
+  evidenceClaimIds Json @map("evidence_claim_ids")
+  gaps Json
+  createdAt DateTime @default(now()) @map("created_at")
+  evaluation CandidateEvaluation @relation(fields: [candidateEvaluationId], references: [id], onDelete: Cascade)
+  @@index([organizationId, candidateEvaluationId])
+  @@map("criterion_evaluations")
+}
+
+model IngestionRun {
+  id String @id
+  organizationId String @map("organization_id")
+  positionId String? @map("position_id")
+  sourceType String @map("source_type")
+  status String
+  totalCount Int @map("total_count")
+  completedCount Int @default(0) @map("completed_count")
+  failedCount Int @default(0) @map("failed_count")
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sources CandidateSource[]
+  @@index([organizationId, createdAt])
+  @@map("ingestion_runs")
+}
+
+model CandidateSource {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String? @map("candidate_id")
+  ingestionRunId String @map("ingestion_run_id")
+  sourceType String @map("source_type")
+  permissionMethod String @map("permission_method")
+  status DocumentProcessingStatus @default(uploaded)
+  sourceLabel String @map("source_label")
+  importedById String @map("imported_by_id")
+  importedAt DateTime @default(now()) @map("imported_at")
+  warnings Json @default("[]")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  candidate Candidate? @relation(fields: [candidateId], references: [id])
+  ingestionRun IngestionRun @relation(fields: [ingestionRunId], references: [id], onDelete: Cascade)
+  document CandidateDocument?
+  @@index([organizationId, candidateId])
+  @@map("candidate_sources")
+}
+
+model CandidateDocument {
+  id String @id
+  organizationId String @map("organization_id")
+  sourceId String @unique @map("source_id")
+  storageKey String @map("storage_key")
+  originalFilename String @map("original_filename")
+  mediaType String @map("media_type")
+  byteSize Int @map("byte_size")
+  checksum String
+  pageCount Int? @map("page_count")
+  malwareScanStatus String @map("malware_scan_status")
+  pdfType String? @map("pdf_type")
+  parsedTextMarkdown String? @map("parsed_text_markdown")
+  pagesNeedingOcr Json @default("[]") @map("pages_needing_ocr")
+  extractor String?
+  extractorVersion String? @map("extractor_version")
+  extractionConfidence Float? @map("extraction_confidence")
+  processingTimeMs Int? @map("processing_time_ms")
+  createdAt DateTime @default(now()) @map("created_at")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source CandidateSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  @@unique([organizationId, checksum])
+  @@map("candidate_documents")
+}
+
+model CandidateIdentity {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  identityType String @map("identity_type")
+  normalizedValue String? @map("normalized_value")
+  valueFingerprint String @map("value_fingerprint")
+  rawValueEncrypted String? @map("raw_value_encrypted")
+  verified Boolean @default(false)
+  sourceId String @map("source_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  @@unique([organizationId, identityType, valueFingerprint])
+  @@index([organizationId, candidateId])
+  @@map("candidate_identities")
+}
+
+model ExternalProfileLink {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  sourceId String @map("source_id")
+  provider String
+  profileUrl String @map("profile_url")
+  externalId String? @map("external_id")
+  retrievalMethod String @map("retrieval_method")
+  createdAt DateTime @default(now()) @map("created_at")
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  @@index([organizationId, candidateId])
+  @@map("external_profile_links")
+}
+
+model Application {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  positionId String @map("position_id")
+  stage String @default("applied")
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  @@unique([organizationId, candidateId, positionId])
+  @@index([organizationId, positionId])
+  @@map("applications")
+}
+
+model DuplicateReview {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  possibleCandidateId String @map("possible_candidate_id")
+  classification DuplicateClassification
+  confidence Float
+  signals Json
+  status String @default("pending")
+  resolvedById String? @map("resolved_by_id")
+  resolvedAt DateTime? @map("resolved_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, status])
+  @@map("duplicate_reviews")
+}
+
+model EvidenceClaim {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  sourceId String @map("source_id")
+  claimType String @map("claim_type")
+  label String
+  claimValue String @map("claim_value")
+  claimStatus String @map("claim_status")
+  pageNumber Int? @map("page_number")
+  sectionLabel String? @map("section_label")
+  excerpt String?
+  extractorVersion String @map("extractor_version")
+  confidence Float
+  createdByType String @map("created_by_type")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, candidateId, createdAt])
+  @@map("evidence_claims")
+}
+
+model EvidenceClaimCorrection {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  claimId String @map("claim_id")
+  action String
+  correctedValue String? @map("corrected_value")
+  reason String
+  createdById String @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, claimId, createdAt])
+  @@map("evidence_claim_corrections")
 }
 
 model OrganizationMember {

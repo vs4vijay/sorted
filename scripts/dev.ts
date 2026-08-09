@@ -54,7 +54,7 @@ function startNextJS() {
 function startWorker() {
   log('WORKER', colors.green, 'Starting Graphile Worker...');
 
-  const worker = spawn('bun', ['run', 'src/lib/worker.ts'], {
+  const worker = spawn('bun', ['--conditions=react-server', 'run', 'src/lib/worker.ts'], {
     stdio: 'pipe',
     shell: true,
   });
@@ -98,10 +98,10 @@ process.on('SIGTERM', cleanup);
 log('DEV', colors.yellow, 'Starting development environment...');
 startNextJS();
 
-// Give Next.js a moment to start, then start worker
-// setTimeout(() => {
-//   startWorker();
-// }, 2000);
+// Start the worker after Next has initialized its development runtime.
+setTimeout(() => {
+  startWorker();
+}, 2000);
 
 // Keep the process running
 process.stdin.resume();

@@ -20,6 +20,15 @@ Slice 0 of [`plan.md`](./plan.md) establishes the recruiting-oriented product sh
 
 All AI-labelled insight in this phase is explicitly marked simulated. No Sarvam API call, CV extraction, outreach delivery, or other external action occurs yet.
 
+## Screenshots
+
+Captured from browser validation runs; the full set lives in [`.images`](./.images).
+
+| | |
+|---|---|
+| ![Dashboard](./.images/slice-0-dashboard-verified-2026-08-09.png) <br> *Dashboard* | ![Positions](./.images/slice-0-positions-verified-2026-08-09.png) <br> *Positions* |
+| ![Sign up / sign in](./.images/slice-1-sign-up-sign-in-verified-2026-08-09.png) <br> *Sign-up and sign-in* | ![Approved rubric](./.images/slice-2-position-rubric-approved-2026-08-09.png) <br> *Manager-approved evaluation rubric* |
+
 ## Sarvam roadmap
 
 - **Sarvam-105B** structures job descriptions into manager-approved rubrics in Slice 2, extracts evidence profiles in Slice 4, evaluates evidence against individual rubric criteria in Slice 5, and drafts approved outreach in Slice 7.
