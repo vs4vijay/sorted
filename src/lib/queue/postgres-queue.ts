@@ -1,4 +1,5 @@
-import { executeQuery, getPGliteInstance } from '../db';
+import { Client } from 'pg';
+import { executeQuery } from '../db';
 import { IQueue, Job, JobOptions, JobPayload } from './types';
 
 const CHANNEL_NAME = 'job_queue';
@@ -189,29 +190,26 @@ export class PostgresQueue implements IQueue {
   }
 
   async subscribe(callback: (jobId: string) => void): Promise<() => void> {
-    const pglite = await getPGliteInstance();
-
-    if (!pglite) {
-      console.warn('⚠️  LISTEN/NOTIFY unavailable on PostgreSQL; worker will rely on polling');
-      return () => {};
-    }
-
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
     try {
-      const unsubscribe = pglite.onNotification((channel, payload) => {
-        if (channel === CHANNEL_NAME) {
-          try {
-            const data = JSON.parse(payload) as { jobId?: string };
-            if (!data.jobId) return;
-            callback(data.jobId);
-          } catch (e) {
-            console.error('Failed to parse notification:', e);
-          }
+      await client.connect();
+      client.on('notification', (message) => {
+        if (message.channel !== CHANNEL_NAME || !message.payload) return;
+        try {
+          const data = JSON.parse(message.payload) as { jobId?: string };
+          if (data.jobId) callback(data.jobId);
+        } catch {
+          console.warn('⚠️  Ignored a malformed job notification.');
         }
       });
-      await pglite.query(`LISTEN ${CHANNEL_NAME}`);
-      return unsubscribe;
-    } catch (e) {
-      console.warn('⚠️  Could not subscribe to notifications:', e);
+      client.on('error', () => {
+        console.warn('⚠️  Job notifications disconnected; polling remains active.');
+      });
+      await client.query(`LISTEN ${CHANNEL_NAME}`);
+      return () => { void client.end(); };
+    } catch {
+      await client.end().catch(() => undefined);
+      console.warn('⚠️  Could not subscribe to job notifications; polling remains active.');
     }
 
     return () => {};

@@ -5,12 +5,14 @@ import { revalidatePath } from 'next/cache';
 import { OrganizationAccessRepository } from '@/features/organizations/repositories/organization-access-repository';
 import { CreateInvitationInputSchema, RevokeInvitationInputSchema, UpdateMemberRoleInputSchema } from '@/features/organizations/schemas/access';
 import { AccessError, requireCurrentAccess } from '@/lib/auth/session';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
 
 export type MemberActionState = { status?: 'success' | 'error'; message?: string; acceptanceUrl?: string; errors?: Record<string, string[]> };
 
 export async function inviteMember(_: MemberActionState, formData: FormData): Promise<MemberActionState> {
   try {
     const access = await requireCurrentAccess('members:manage');
+    await enforceRateLimit(access.organization.id, access.userId, 'member_invitation');
     const parsed = CreateInvitationInputSchema.safeParse(Object.fromEntries(formData));
     if (!parsed.success) return { status: 'error', message: 'Check the invitation details.', errors: parsed.error.flatten().fieldErrors };
     const token = randomBytes(32).toString('base64url');

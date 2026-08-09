@@ -1,5 +1,6 @@
 import 'server-only';
 import { CandidateAudioOutputSchema, type CandidateAudioOutput } from '../schemas/candidate-audio';
+import { providerEnabled } from '@/lib/providers/provider-controls';
 
 export type SpeechExecution = { provider: 'sarvam' | 'fixture'; model: string; schemaVersion: 'candidate-audio.v1'; requestId?: string; latencyMs: number; status: 'succeeded' | 'simulated'; error?: { code: string; message: string } };
 export interface TextToSpeechProvider { synthesize(text: string, languageCode: string, voice: string): Promise<{ data: CandidateAudioOutput; execution: SpeechExecution }>; }
@@ -31,7 +32,7 @@ export class BulbulTextToSpeechProvider implements TextToSpeechProvider {
 }
 
 export async function synthesizeCandidateAudio(text: string, languageCode: string, voice: string) {
-  if (!process.env.SARVAM_API_KEY) return new FakeTextToSpeechProvider().synthesize(text, languageCode, voice);
+  if (!providerEnabled('sarvam')) return new FakeTextToSpeechProvider().synthesize(text, languageCode, voice);
   try { return await new BulbulTextToSpeechProvider().synthesize(text, languageCode, voice); }
   catch (error) { const fallback = await new FakeTextToSpeechProvider().synthesize(text, languageCode, voice); return { ...fallback, execution: { ...fallback.execution, error: { code: String((error as { code?: string }).code ?? 'provider_error'), message: 'Bulbul generation was unavailable; deterministic simulated audio was used.' } } }; }
 }

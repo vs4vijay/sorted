@@ -2,29 +2,7 @@
 
 import { PGlite } from '@electric-sql/pglite';
 
-function generateCuid() {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).substring(2, 15);
-  return `c${timestamp}${randomStr}`;
-}
-
-async function main() {
-  console.log('🗄️  Initializing PGlite database...');
-
-  const databaseUrl = process.env.DATABASE_URL || 'file:./dev.db';
-
-  if (!databaseUrl.startsWith('file:')) {
-    console.error('❌ This script is for PGlite initialization only.');
-    console.error('   For PostgreSQL, use: bun run db:migrate');
-    process.exit(1);
-  }
-
-  const dbPath = databaseUrl.replace('file:', '');
-
-  const pglite = new PGlite(dbPath);
-  await pglite.waitReady;
-
-  try {
+export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } = {}) {
     console.log('📋 Creating tables...');
 
     await pglite.exec(`
@@ -133,8 +111,15 @@ async function main() {
     await pglite.exec(`
       CREATE TABLE IF NOT EXISTS candidates (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, display_name TEXT NOT NULL, headline TEXT, location TEXT, profile_status TEXT NOT NULL DEFAULT 'unreviewed', merged_into_id TEXT, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS ingestion_runs (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, position_id TEXT, source_type TEXT NOT NULL, status TEXT NOT NULL, total_count INTEGER NOT NULL, completed_count INTEGER NOT NULL DEFAULT 0, failed_count INTEGER NOT NULL DEFAULT 0, created_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
-      CREATE TABLE IF NOT EXISTS candidate_sources (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, candidate_id TEXT REFERENCES candidates(id), ingestion_run_id TEXT NOT NULL REFERENCES ingestion_runs(id) ON DELETE CASCADE, source_type TEXT NOT NULL, permission_method TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'uploaded' CHECK(status IN ('uploaded','scanning','extracting','parsed','needs_review','failed')), source_label TEXT NOT NULL, imported_by_id TEXT NOT NULL, imported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, warnings JSON NOT NULL DEFAULT '[]'::JSON);
-      CREATE TABLE IF NOT EXISTS candidate_documents (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, source_id TEXT NOT NULL UNIQUE REFERENCES candidate_sources(id) ON DELETE CASCADE, storage_key TEXT NOT NULL, original_filename TEXT NOT NULL, media_type TEXT NOT NULL, byte_size INTEGER NOT NULL, checksum TEXT NOT NULL, page_count INTEGER, malware_scan_status TEXT NOT NULL, pdf_type TEXT, parsed_text_markdown TEXT, pages_needing_ocr JSON NOT NULL DEFAULT '[]'::JSON, extractor TEXT, extractor_version TEXT, extraction_confidence DOUBLE PRECISION, processing_time_ms INTEGER, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(organization_id,checksum));
+      CREATE TABLE IF NOT EXISTS candidate_sources (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, candidate_id TEXT REFERENCES candidates(id), ingestion_run_id TEXT NOT NULL REFERENCES ingestion_runs(id) ON DELETE CASCADE, source_type TEXT NOT NULL, permission_method TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'uploaded' CHECK(status IN ('uploaded','scanning','extracting','parsed','needs_review','failed','quarantined')), source_label TEXT NOT NULL, imported_by_id TEXT NOT NULL, imported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, warnings JSON NOT NULL DEFAULT '[]'::JSON);
+      CREATE TABLE IF NOT EXISTS candidate_documents (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, source_id TEXT NOT NULL UNIQUE REFERENCES candidate_sources(id) ON DELETE CASCADE, storage_key TEXT NOT NULL, original_filename TEXT NOT NULL, media_type TEXT NOT NULL, byte_size INTEGER NOT NULL, checksum TEXT NOT NULL, page_count INTEGER, malware_scan_status TEXT NOT NULL, malware_scan_provider TEXT, malware_scan_version TEXT, malware_scan_request_id TEXT, malware_scan_error TEXT, malware_scanned_at TIMESTAMP, pdf_type TEXT, parsed_text_markdown TEXT, pages_needing_ocr JSON NOT NULL DEFAULT '[]'::JSON, extractor TEXT, extractor_version TEXT, extraction_confidence DOUBLE PRECISION, processing_time_ms INTEGER, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(organization_id,checksum));
+      ALTER TABLE candidate_documents ADD COLUMN IF NOT EXISTS malware_scan_provider TEXT;
+      ALTER TABLE candidate_documents ADD COLUMN IF NOT EXISTS malware_scan_version TEXT;
+      ALTER TABLE candidate_documents ADD COLUMN IF NOT EXISTS malware_scan_request_id TEXT;
+      ALTER TABLE candidate_documents ADD COLUMN IF NOT EXISTS malware_scan_error TEXT;
+      ALTER TABLE candidate_documents ADD COLUMN IF NOT EXISTS malware_scanned_at TIMESTAMP;
+      ALTER TABLE candidate_sources DROP CONSTRAINT IF EXISTS candidate_sources_status_check;
+      ALTER TABLE candidate_sources ADD CONSTRAINT candidate_sources_status_check CHECK(status IN ('uploaded','scanning','extracting','parsed','needs_review','failed','quarantined'));
       CREATE TABLE IF NOT EXISTS candidate_identities (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, candidate_id TEXT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE, identity_type TEXT NOT NULL, normalized_value TEXT, value_fingerprint TEXT NOT NULL, raw_value_encrypted TEXT, verified BOOLEAN NOT NULL DEFAULT FALSE, source_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(organization_id,identity_type,value_fingerprint));
       CREATE TABLE IF NOT EXISTS external_profile_links (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, candidate_id TEXT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE, source_id TEXT NOT NULL, provider TEXT NOT NULL, profile_url TEXT NOT NULL, external_id TEXT, retrieval_method TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS applications (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, candidate_id TEXT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE, position_id TEXT NOT NULL, stage TEXT NOT NULL DEFAULT 'applied', created_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(organization_id,candidate_id,position_id));
@@ -146,9 +131,13 @@ async function main() {
       CREATE INDEX IF NOT EXISTS external_profile_links_org_candidate_idx ON external_profile_links(organization_id,candidate_id);
       CREATE INDEX IF NOT EXISTS applications_org_position_idx ON applications(organization_id,position_id);
       CREATE INDEX IF NOT EXISTS duplicate_reviews_org_status_idx ON duplicate_reviews(organization_id,status);
-      CREATE TABLE IF NOT EXISTS candidate_privacy_requests (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, candidate_id TEXT NOT NULL REFERENCES candidates(id), request_type TEXT NOT NULL CHECK(request_type IN ('correction','export','deletion')), status TEXT NOT NULL DEFAULT 'requested' CHECK(status IN ('requested','approved','completed','declined')), details TEXT NOT NULL, requested_by_id TEXT NOT NULL, requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, decided_by_id TEXT, decided_at TIMESTAMP, decision_rationale TEXT, completed_at TIMESTAMP);
+      CREATE TABLE IF NOT EXISTS candidate_privacy_requests (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, candidate_id TEXT NOT NULL REFERENCES candidates(id), request_type TEXT NOT NULL CHECK(request_type IN ('correction','export','deletion')), status TEXT NOT NULL DEFAULT 'requested' CHECK(status IN ('requested','approved','completed','declined')), details TEXT NOT NULL, requested_by_id TEXT, request_source TEXT NOT NULL DEFAULT 'recruiter_recorded', requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, decided_by_id TEXT, decided_at TIMESTAMP, decision_rationale TEXT, completed_at TIMESTAMP);
       CREATE INDEX IF NOT EXISTS candidate_privacy_requests_org_candidate_idx ON candidate_privacy_requests(organization_id,candidate_id,requested_at);
       CREATE INDEX IF NOT EXISTS candidate_privacy_requests_org_status_idx ON candidate_privacy_requests(organization_id,status,requested_at);
+      CREATE TABLE IF NOT EXISTS candidate_privacy_access_tokens (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, candidate_id TEXT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE, token_hash TEXT NOT NULL UNIQUE, expires_at TIMESTAMP NOT NULL, created_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, last_used_at TIMESTAMP, revoked_at TIMESTAMP);
+      CREATE INDEX IF NOT EXISTS candidate_privacy_access_tokens_org_candidate_idx ON candidate_privacy_access_tokens(organization_id,candidate_id,expires_at);
+      ALTER TABLE candidate_privacy_requests ALTER COLUMN requested_by_id DROP NOT NULL;
+      ALTER TABLE candidate_privacy_requests ADD COLUMN IF NOT EXISTS request_source TEXT NOT NULL DEFAULT 'recruiter_recorded';
 
       CREATE TABLE IF NOT EXISTS evidence_claims (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, candidate_id TEXT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE, source_id TEXT NOT NULL REFERENCES candidate_sources(id) ON DELETE CASCADE, claim_type TEXT NOT NULL CHECK(claim_type IN ('employment','education','project','skill','certification','language','logistics','other')), label TEXT NOT NULL, claim_value TEXT NOT NULL, claim_status TEXT NOT NULL CHECK(claim_status IN ('explicit','inferred','externally_evidenced','contradicted','unverified')), page_number INTEGER, section_label TEXT, excerpt TEXT, extractor_version TEXT NOT NULL, confidence DOUBLE PRECISION NOT NULL CHECK(confidence BETWEEN 0 AND 1), created_by_type TEXT NOT NULL CHECK(created_by_type IN ('model','human','import')), created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS evidence_claim_corrections (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, candidate_id TEXT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE, claim_id TEXT NOT NULL REFERENCES evidence_claims(id) ON DELETE CASCADE, action TEXT NOT NULL CHECK(action IN ('confirm','reject','correct')), corrected_value TEXT, reason TEXT NOT NULL, created_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -193,6 +182,8 @@ async function main() {
       CREATE TABLE IF NOT EXISTS pipeline_handoff_snapshots (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, application_id TEXT NOT NULL, candidate_id TEXT NOT NULL, position_id TEXT NOT NULL, shortlist_decision_id TEXT NOT NULL, candidate_evaluation_id TEXT NOT NULL, rubric_id TEXT NOT NULL, rubric_version INTEGER NOT NULL, evidence_snapshot JSON NOT NULL, response_thread_id TEXT NOT NULL, rationale TEXT NOT NULL, advanced_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS pipeline_stage_transitions (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, application_id TEXT NOT NULL, from_stage TEXT NOT NULL, to_stage TEXT NOT NULL, actor_user_id TEXT NOT NULL, rationale TEXT NOT NULL, snapshot_id TEXT, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE INDEX IF NOT EXISTS pipeline_stage_transitions_org_app_idx ON pipeline_stage_transitions(organization_id,application_id,created_at);
+      CREATE TABLE IF NOT EXISTS rate_limit_events (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, actor_id TEXT NOT NULL, action TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE INDEX IF NOT EXISTS rate_limit_events_scope_idx ON rate_limit_events(organization_id,actor_id,action,created_at);
     `);
 
     console.log('⚙️  Creating Jobs table...');
@@ -224,22 +215,53 @@ async function main() {
 
     console.log('✅ Database schema created successfully');
 
+    if (!options.seed) return;
+
     console.log('🌱 Seeding database...');
 
-    await pglite.exec('DELETE FROM items;');
-
-    const item1Id = generateCuid();
-    const item2Id = generateCuid();
-    const item3Id = generateCuid();
-
     await pglite.exec(`
-      INSERT INTO items (id, name, description) VALUES
-        ('${item1Id}', 'Sample Item 1', 'This is a sample item to demonstrate the system'),
-        ('${item2Id}', 'Sample Item 2', 'Another sample item with a background job trigger'),
-        ('${item3Id}', 'Sample Item 3', 'Third sample item for testing');
+      INSERT INTO users (id,email,name) VALUES ('local-dev-user','developer@sorted.local','Local Developer') ON CONFLICT (id) DO NOTHING;
+      INSERT INTO organizations (id,name,slug,timezone,default_locale) VALUES ('local-dev-organization','Sorted Local Workspace','sorted-local','Asia/Kolkata','en-IN') ON CONFLICT (id) DO NOTHING;
+      INSERT INTO organization_members (id,organization_id,user_id,role) VALUES ('local-dev-membership','local-dev-organization','local-dev-user','admin') ON CONFLICT (organization_id,user_id) DO NOTHING;
+
+      INSERT INTO positions (id,organization_id,title,status,employment_type,location,workplace_preference,minimum_experience,preferred_experience,created_by_id) VALUES
+        ('seed-senior-backend-engineer','local-dev-organization','Senior Backend Engineer','screening','Full-time','Bengaluru','Hybrid',5,7,'local-dev-user'),
+        ('seed-product-designer','local-dev-organization','Product Designer','rubric_review','Full-time','Mumbai','Hybrid',3,5,'local-dev-user'),
+        ('seed-data-analyst','local-dev-organization','Data Analyst','draft','Contract','Remote · India','Remote',2,4,'local-dev-user')
+      ON CONFLICT (id) DO NOTHING;
+
+      INSERT INTO provider_executions (id,organization_id,provider,operation,model,prompt_version,schema_version,status,latency_ms) VALUES
+        ('seed-exec-backend','local-dev-organization','fixture','job_description.structure','deterministic-fixture','job-description.v1','structured-job-description.v1','simulated',0),
+        ('seed-exec-designer','local-dev-organization','fixture','job_description.structure','deterministic-fixture','job-description.v1','structured-job-description.v1','simulated',0),
+        ('seed-exec-analyst','local-dev-organization','fixture','job_description.structure','deterministic-fixture','job-description.v1','structured-job-description.v1','simulated',0)
+      ON CONFLICT (id) DO NOTHING;
+
+      INSERT INTO job_descriptions (id,organization_id,position_id,version,source_type,raw_text,structured_data,extraction_mode,provider_execution_id,created_by_id) VALUES
+        ('seed-jd-backend','local-dev-organization','seed-senior-backend-engineer',1,'pasted','Build reliable backend services for a growing Indian fintech platform.','{"title":"Senior Backend Engineer","seniority":"Senior","skills":["TypeScript","PostgreSQL","Distributed systems"],"responsibilities":["Design reliable APIs","Own data-intensive services","Mentor engineers"]}'::JSON,'simulated','seed-exec-backend','local-dev-user'),
+        ('seed-jd-designer','local-dev-organization','seed-product-designer',1,'pasted','Design accessible product workflows for recruiters and hiring panels.','{"title":"Product Designer","seniority":"Mid-senior","skills":["Product design","User research","Design systems"],"responsibilities":["Lead discovery","Prototype workflows","Maintain accessible patterns"]}'::JSON,'simulated','seed-exec-designer','local-dev-user'),
+        ('seed-jd-analyst','local-dev-organization','seed-data-analyst',1,'pasted','Turn recruiting operations data into trustworthy reporting and insights.','{"title":"Data Analyst","seniority":"Mid-level","skills":["SQL","Data visualization","Statistics"],"responsibilities":["Define metrics","Build dashboards","Audit data quality"]}'::JSON,'simulated','seed-exec-analyst','local-dev-user')
+      ON CONFLICT (organization_id,position_id,version) DO NOTHING;
+
+      INSERT INTO evaluation_rubrics (id,organization_id,position_id,version,status,approved_by_id,approved_at,created_by_id) VALUES
+        ('seed-rubric-backend','local-dev-organization','seed-senior-backend-engineer',1,'approved','local-dev-user',CURRENT_TIMESTAMP,'local-dev-user'),
+        ('seed-rubric-designer','local-dev-organization','seed-product-designer',1,'draft',NULL,NULL,'local-dev-user'),
+        ('seed-rubric-analyst','local-dev-organization','seed-data-analyst',1,'draft',NULL,NULL,'local-dev-user')
+      ON CONFLICT (organization_id,position_id,version) DO NOTHING;
+
+      INSERT INTO rubric_criteria (id,organization_id,rubric_id,name,description,criterion_type,classification,weight,evidence_expectations,display_order) VALUES
+        ('seed-criterion-backend-1','local-dev-organization','seed-rubric-backend','Backend systems','Has designed and operated production backend services.','experience','must_have',40,'Specific service ownership with scale, reliability, or latency outcomes.',0),
+        ('seed-criterion-backend-2','local-dev-organization','seed-rubric-backend','PostgreSQL','Can model, query, and tune relational data.','skill','must_have',30,'Schema design, query tuning, migrations, or production troubleshooting.',1),
+        ('seed-criterion-backend-3','local-dev-organization','seed-rubric-backend','Technical leadership','Raises engineering quality through reviews and mentoring.','experience','preferred',30,'Examples of mentoring, design reviews, or cross-team technical ownership.',2),
+        ('seed-criterion-designer-1','local-dev-organization','seed-rubric-designer','Product discovery','Turns user needs into clear product direction.','experience','must_have',40,'Research artifacts and decisions tied to user evidence.',0),
+        ('seed-criterion-designer-2','local-dev-organization','seed-rubric-designer','Interaction design','Creates usable end-to-end workflows.','skill','must_have',35,'Portfolio evidence showing flows, prototypes, and iteration.',1),
+        ('seed-criterion-designer-3','local-dev-organization','seed-rubric-designer','Design systems','Contributes reusable accessible patterns.','skill','preferred',25,'Documented components, governance, or accessibility work.',2),
+        ('seed-criterion-analyst-1','local-dev-organization','seed-rubric-analyst','SQL analysis','Produces correct analysis from relational data.','skill','must_have',45,'Queries, data modeling, and validation examples.',0),
+        ('seed-criterion-analyst-2','local-dev-organization','seed-rubric-analyst','Decision-ready reporting','Communicates metrics and tradeoffs clearly.','skill','must_have',30,'Dashboards or reports connected to business decisions.',1),
+        ('seed-criterion-analyst-3','local-dev-organization','seed-rubric-analyst','Data quality','Finds and resolves unreliable data.','experience','preferred',25,'Concrete audits, monitoring, or reconciliation work.',2)
+      ON CONFLICT (id) DO NOTHING;
     `);
 
-    console.log('✅ Created 3 sample items');
+    console.log('✅ Seeded 3 persisted recruiting positions and balanced rubrics');
     console.log('🎉 Database initialization complete!');
     console.log('');
     console.log('Next steps:');
@@ -247,12 +269,27 @@ async function main() {
     console.log('  2. Visit: http://localhost:7070');
     console.log('  3. Check jobs: http://localhost:7070/jobs');
 
+}
+
+async function main() {
+  console.log('🗄️  Initializing PGlite database...');
+  const databaseUrl = process.env.DATABASE_URL || 'file:./dev.db';
+  if (!databaseUrl.startsWith('file:')) {
+    throw new Error('This script only initializes a file-backed PGlite database. Use bun run db:migrate for PostgreSQL.');
+  }
+
+  const pglite = new PGlite(databaseUrl.replace('file:', ''));
+  await pglite.waitReady;
+  try {
+    await ensureSchema(pglite, { seed: true });
+  } finally {
     await pglite.close();
-  } catch (error) {
-    console.error('❌ Database initialization failed:', error);
-    await pglite.close();
-    process.exit(1);
   }
 }
 
-main();
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error('❌ Database initialization failed:', error);
+    process.exit(1);
+  });
+}

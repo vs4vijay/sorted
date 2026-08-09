@@ -1,5 +1,6 @@
 import 'server-only';
 import { StructuredJobDescriptionSchemaV1, type StructuredJobDescription } from '../schemas/position';
+import { providerEnabled } from '@/lib/providers/provider-controls';
 
 export type StructuringResult = { data: StructuredJobDescription; execution: { provider: 'sarvam' | 'fixture'; model: string; promptVersion: 'jd-structure.prompt.v1'; schemaVersion: 'jd-structure.v1'; requestId?: string; latencyMs: number; status: 'succeeded' | 'simulated'; error?: { code: string; message: string } } };
 export interface JobDescriptionStructuringProvider { structure(text: string, titleHint: string): Promise<StructuringResult>; }
@@ -28,7 +29,7 @@ export class SarvamJobDescriptionStructuringProvider implements JobDescriptionSt
 
 export async function structureJobDescription(text: string, title: string): Promise<StructuringResult> {
   if (!text) return new FakeJobDescriptionStructuringProvider().structure('', title);
-  if (!process.env.SARVAM_API_KEY) return new FakeJobDescriptionStructuringProvider().structure(text, title);
+  if (!providerEnabled('sarvam')) return new FakeJobDescriptionStructuringProvider().structure(text, title);
   try { return await new SarvamJobDescriptionStructuringProvider().structure(text, title); }
   catch (error) { const fallback = await new FakeJobDescriptionStructuringProvider().structure(text, title); return { ...fallback, execution: { ...fallback.execution, error: { code: String((error as { code?: string }).code ?? 'provider_error'), message: 'Sarvam structuring was unavailable; deterministic simulated output was used.' } } }; }
 }

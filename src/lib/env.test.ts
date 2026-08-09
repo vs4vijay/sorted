@@ -15,4 +15,14 @@ describe('server environment', () => {
       'LOCAL_AUTH_BYPASS can only be enabled when APP_ENV=development.',
     );
   });
+
+  test('defaults application queries to the local PostgreSQL wire endpoint', () => {
+    expect(parseServerEnv({}).DATABASE_URL).toBe('postgresql://127.0.0.1:5433/sorted');
+  });
+
+  test('rejects file database URLs in application processes', () => {
+    expect(() => parseServerEnv({ DATABASE_URL: 'file:./dev.db' })).toThrow(
+      'Application processes require a PostgreSQL wire URL',
+    );
+  });
 });

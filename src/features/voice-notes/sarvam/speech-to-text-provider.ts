@@ -1,4 +1,5 @@
 import 'server-only';
+import { providerEnabled } from '@/lib/providers/provider-controls';
 import { VoiceTranscriptSchemaV1, type VoiceTranscript } from '../schemas/voice-note';
 
 export type TranscriptionResult = { data: VoiceTranscript; execution: { provider: 'sarvam' | 'fixture'; model: string; promptVersion: 'voice-note.prompt.v1'; schemaVersion: 'voice-transcript.v1'; requestId?: string; latencyMs: number; status: 'succeeded' | 'simulated'; error?: { code: string; message: string } } };
@@ -27,7 +28,7 @@ export class SaarasSpeechToTextProvider implements SpeechToTextProvider {
 }
 
 export async function transcribeVoiceNote(bytes: Uint8Array, mediaType: string, languageCode: string): Promise<TranscriptionResult> {
-  if (!process.env.SARVAM_API_KEY) return new FakeSpeechToTextProvider().transcribe(bytes, mediaType, languageCode);
+  if (!providerEnabled('sarvam')) return new FakeSpeechToTextProvider().transcribe(bytes, mediaType, languageCode);
   try { return await new SaarasSpeechToTextProvider().transcribe(bytes, mediaType, languageCode); }
   catch (error) { const fallback = await new FakeSpeechToTextProvider().transcribe(bytes, mediaType, languageCode); return { ...fallback, execution: { ...fallback.execution, error: { code: String((error as { code?: string }).code ?? 'provider_error'), message: 'Saaras transcription was unavailable; deterministic simulated output was used.' } } }; }
 }
