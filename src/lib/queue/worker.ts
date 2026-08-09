@@ -1,4 +1,4 @@
-import { IWorker, TaskHandler, WorkerOptions, Job, JobPayload } from './types';
+import { IWorker, TaskHandler, WorkerOptions, Job } from './types';
 import { queue, PostgresQueue } from './postgres-queue';
 
 export class Worker implements IWorker {
@@ -49,7 +49,7 @@ export class Worker implements IWorker {
         console.log(`📬 Received notification for job: ${jobId}`);
         this.processNextJob();
       });
-    } catch (e) {
+    } catch {
       console.warn('⚠️  Could not subscribe to notifications, polling will be used instead');
     }
 

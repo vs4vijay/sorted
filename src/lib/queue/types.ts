@@ -34,7 +34,7 @@ export interface IQueue {
   enqueue<T extends JobPayload = JobPayload>(
     taskIdentifier: string,
     payload: T,
-    options?: JobOptions
+    options?: JobOptions,
   ): Promise<Job>;
 
   getJob(id: string): Promise<Job | null>;

@@ -1,12 +1,12 @@
-import { executeQuery } from "@/lib/db";
-import type { CandidateExtraction } from "../schemas/ingestion";
-import { projectEvidence } from "../services/evidence-projector";
+import { executeQuery } from '@/lib/db';
+import type { CandidateExtraction } from '../schemas/ingestion';
+import { projectEvidence } from '../services/evidence-projector';
 type Query = (sql: string, params?: unknown[]) => Promise<unknown[]>;
 export class CandidateIngestionRepository {
   constructor(private query: Query = executeQuery) {}
   async checksumExists(org: string, checksum: string) {
     const rows = (await this.query(
-      "SELECT c.id,c.display_name FROM candidate_documents d JOIN candidate_sources s ON s.id=d.source_id JOIN candidates c ON c.id=s.candidate_id WHERE d.organization_id=$1 AND d.checksum=$2 LIMIT 1",
+      'SELECT c.id,c.display_name FROM candidate_documents d JOIN candidate_sources s ON s.id=d.source_id JOIN candidates c ON c.id=s.candidate_id WHERE d.organization_id=$1 AND d.checksum=$2 LIMIT 1',
       [org, checksum],
     )) as { id: string; display_name: string }[];
     return rows[0] ?? null;
@@ -59,14 +59,38 @@ export class CandidateIngestionRepository {
       ],
     );
   }
-  async recordMalwareScan(input:{org:string;documentId:string;actorId:string;status:'clean'|'clean_simulated'|'quarantined'|'scan_failed';provider:string;engineVersion:string;requestId?:string;error?:string}){
-    const rows=await this.query(
+  async recordMalwareScan(input: {
+    org: string;
+    documentId: string;
+    actorId: string;
+    status: 'clean' | 'clean_simulated' | 'quarantined' | 'scan_failed';
+    provider: string;
+    engineVersion: string;
+    requestId?: string;
+    error?: string;
+  }) {
+    const rows = await this.query(
       `WITH d AS (UPDATE candidate_documents SET malware_scan_status=$3,malware_scan_provider=$4,malware_scan_version=$5,malware_scan_request_id=$6,malware_scan_error=$7,malware_scanned_at=CURRENT_TIMESTAMP WHERE organization_id=$1 AND id=$2 RETURNING source_id), s AS (UPDATE candidate_sources SET status=CASE WHEN $3 IN ('clean','clean_simulated') THEN 'uploaded' ELSE 'quarantined' END,warnings=CASE WHEN $7::TEXT IS NULL THEN '[]'::JSON ELSE json_build_array($7::TEXT) END WHERE organization_id=$1 AND id=(SELECT source_id FROM d) RETURNING ingestion_run_id), r AS (UPDATE ingestion_runs SET failed_count=failed_count+CASE WHEN $3 IN ('quarantined','scan_failed') THEN 1 ELSE 0 END,updated_at=CURRENT_TIMESTAMP,status=CASE WHEN $3 IN ('quarantined','scan_failed') AND completed_count+failed_count+1>=total_count THEN 'completed_with_errors' ELSE status END WHERE organization_id=$1 AND id=(SELECT ingestion_run_id FROM s)) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) SELECT $8,$1,$9,'candidate_document.security_scanned','candidate_document',$2,json_build_object('status',$3::TEXT,'provider',$4::TEXT,'engine_version',$5::TEXT) WHERE EXISTS(SELECT 1 FROM d) RETURNING subject_id`,
-      [input.org,input.documentId,input.status,input.provider,input.engineVersion,input.requestId??null,input.error??null,crypto.randomUUID(),input.actorId],
+      [
+        input.org,
+        input.documentId,
+        input.status,
+        input.provider,
+        input.engineVersion,
+        input.requestId ?? null,
+        input.error ?? null,
+        crypto.randomUUID(),
+        input.actorId,
+      ],
     );
     return Boolean(rows[0]);
   }
-  async listQuarantined(org:string){return this.query(`SELECT d.id,d.original_filename,d.malware_scan_status,d.malware_scan_provider,d.malware_scan_error,d.malware_scanned_at,s.source_label FROM candidate_documents d JOIN candidate_sources s ON s.id=d.source_id AND s.organization_id=d.organization_id WHERE d.organization_id=$1 AND d.malware_scan_status IN ('quarantined','scan_failed') ORDER BY d.created_at DESC`,[org]) as Promise<Record<string,unknown>[]>}
+  async listQuarantined(org: string) {
+    return this.query(
+      `SELECT d.id,d.original_filename,d.malware_scan_status,d.malware_scan_provider,d.malware_scan_error,d.malware_scanned_at,s.source_label FROM candidate_documents d JOIN candidate_sources s ON s.id=d.source_id AND s.organization_id=d.organization_id WHERE d.organization_id=$1 AND d.malware_scan_status IN ('quarantined','scan_failed') ORDER BY d.created_at DESC`,
+      [org],
+    ) as Promise<Record<string, unknown>[]>;
+  }
   async getDocument(org: string, documentId: string) {
     const rows = await this.query(
       `SELECT d.*,s.status,s.ingestion_run_id,s.source_label,s.candidate_id,r.position_id,r.created_by_id FROM candidate_documents d JOIN candidate_sources s ON s.id=d.source_id JOIN ingestion_runs r ON r.id=s.ingestion_run_id WHERE d.organization_id=$1 AND d.id=$2`,
@@ -96,7 +120,7 @@ export class CandidateIngestionRepository {
     version: string;
     confidence: number | null;
     processingMs: number | null;
-    status: "parsed" | "needs_review";
+    status: 'parsed' | 'needs_review';
     execution: {
       provider: string;
       model: string;
@@ -119,7 +143,7 @@ export class CandidateIngestionRepository {
         input.candidate.displayName,
         input.candidate.headline,
         input.candidate.location,
-        input.status === "parsed" ? "unreviewed" : "needs_review",
+        input.status === 'parsed' ? 'unreviewed' : 'needs_review',
         input.status,
         JSON.stringify(input.candidate.processingWarnings),
         input.sourceId,
@@ -148,26 +172,32 @@ export class CandidateIngestionRepository {
         auditId,
       ],
     );
-    for (const claim of projectEvidence(input.markdown ?? ""))
+    for (const claim of projectEvidence(input.markdown ?? ''))
       await this.query(
         `INSERT INTO evidence_claims(id,organization_id,candidate_id,source_id,claim_type,label,claim_value,claim_status,section_label,excerpt,extractor_version,confidence,created_by_type) VALUES($1,$2,$3,$4,$5,$6,$7,'explicit',$8,$9,$10,$11,'model')`,
-        [crypto.randomUUID(), input.org, candidateId, input.sourceId, claim.claimType, claim.label, claim.value, claim.section, claim.excerpt, `${input.extractor}:${input.version}`, claim.confidence],
+        [
+          crypto.randomUUID(),
+          input.org,
+          candidateId,
+          input.sourceId,
+          claim.claimType,
+          claim.label,
+          claim.value,
+          claim.section,
+          claim.excerpt,
+          `${input.extractor}:${input.version}`,
+          claim.confidence,
+        ],
       );
     for (const [type, values] of [
-      ["email", input.candidate.emails],
-      ["phone", input.candidate.phones],
+      ['email', input.candidate.emails],
+      ['phone', input.candidate.phones],
     ] as const)
       for (const value of values) {
-        const normalized =
-          type === "email"
-            ? value.trim().toLowerCase()
-            : value.replace(/\D/g, "");
+        const normalized = type === 'email' ? value.trim().toLowerCase() : value.replace(/\D/g, '');
         const fingerprint = await crypto.subtle
-          .digest(
-            "SHA-256",
-            new TextEncoder().encode(`${input.org}:${type}:${normalized}`),
-          )
-          .then((v) => Buffer.from(v).toString("hex"));
+          .digest('SHA-256', new TextEncoder().encode(`${input.org}:${type}:${normalized}`))
+          .then((v) => Buffer.from(v).toString('hex'));
         const existing = (await this.query(
           `SELECT candidate_id FROM candidate_identities WHERE organization_id=$1 AND identity_type=$2 AND value_fingerprint=$3 LIMIT 1`,
           [input.org, type, fingerprint],
@@ -199,13 +229,7 @@ export class CandidateIngestionRepository {
       }
     return candidateId;
   }
-  async fail(
-    org: string,
-    documentId: string,
-    sourceId: string,
-    runId: string,
-    message: string,
-  ) {
+  async fail(org: string, documentId: string, sourceId: string, runId: string, message: string) {
     await this.query(
       `WITH s AS (UPDATE candidate_sources SET status='failed',warnings=$1::JSON WHERE id=$2 AND organization_id=$3),r AS (UPDATE ingestion_runs SET failed_count=failed_count+1,updated_at=CURRENT_TIMESTAMP,status=CASE WHEN completed_count+failed_count+1>=total_count THEN 'completed_with_errors' ELSE status END WHERE id=$4 AND organization_id=$3) UPDATE candidate_documents SET parsed_text_markdown=NULL WHERE id=$5 AND organization_id=$3`,
       [JSON.stringify([message]), sourceId, org, runId, documentId],
@@ -217,7 +241,13 @@ export class CandidateIngestionRepository {
       [org],
     ) as Promise<Record<string, unknown>[]>;
   }
-  async countCandidates(org:string){const rows=await this.query(`SELECT COUNT(*)::INT AS count FROM candidates WHERE organization_id=$1 AND merged_into_id IS NULL`,[org]) as {count:number}[];return Number(rows[0]?.count??0)}
+  async countCandidates(org: string) {
+    const rows = (await this.query(
+      `SELECT COUNT(*)::INT AS count FROM candidates WHERE organization_id=$1 AND merged_into_id IS NULL`,
+      [org],
+    )) as { count: number }[];
+    return Number(rows[0]?.count ?? 0);
+  }
   async listRuns(org: string) {
     return this.query(
       `SELECT r.*,p.title AS position_title FROM ingestion_runs r LEFT JOIN positions p ON p.id=r.position_id AND p.organization_id=r.organization_id WHERE r.organization_id=$1 ORDER BY r.created_at DESC LIMIT 8`,
@@ -227,9 +257,7 @@ export class CandidateIngestionRepository {
   async getCandidate(
     org: string,
     id: string,
-  ): Promise<
-    (Record<string, unknown> & { sources: Record<string, unknown>[] }) | null
-  > {
+  ): Promise<(Record<string, unknown> & { sources: Record<string, unknown>[] }) | null> {
     const rows = (await this.query(
       `SELECT * FROM candidates WHERE organization_id=$1 AND id=$2 AND merged_into_id IS NULL`,
       [org, id],

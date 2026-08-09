@@ -4,7 +4,14 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { connect } from 'net';
 
 const processes: ChildProcessWithoutNullStreams[] = [];
-const colors = { reset: '\x1b[0m', bright: '\x1b[1m', blue: '\x1b[34m', green: '\x1b[32m', yellow: '\x1b[33m', red: '\x1b[31m' };
+const colors = {
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  blue: '\x1b[34m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+};
 let shuttingDown = false;
 
 function log(prefix: string, color: string, message: string) {
@@ -15,15 +22,31 @@ function localDatabaseConfig() {
   const port = Number(process.env.PGLITE_PORT || 5433);
   const configured = process.env.DATABASE_URL || 'postgresql://127.0.0.1:5433/sorted';
   const legacyFileUrl = configured.startsWith('file:');
-  const url = legacyFileUrl ? new URL(`postgresql://127.0.0.1:${port}/sorted`) : new URL(configured);
-  const local = legacyFileUrl || (['127.0.0.1', 'localhost'].includes(url.hostname) && Number(url.port || 5432) === port);
+  const url = legacyFileUrl
+    ? new URL(`postgresql://127.0.0.1:${port}/sorted`)
+    : new URL(configured);
+  const local =
+    legacyFileUrl ||
+    (['127.0.0.1', 'localhost'].includes(url.hostname) && Number(url.port || 5432) === port);
   return { local, port, databaseUrl: local ? `postgresql://127.0.0.1:${port}/sorted` : configured };
 }
 
-function pipeProcess(prefix: string, color: string, command: string, args: string[], env: NodeJS.ProcessEnv) {
+function pipeProcess(
+  prefix: string,
+  color: string,
+  command: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+) {
   const child = spawn(command, args, { stdio: 'pipe', env });
-  child.stdout.on('data', (data) => { const message = data.toString().trim(); if (message) log(prefix, color, message); });
-  child.stderr.on('data', (data) => { const message = data.toString().trim(); if (message) log(prefix, color, message); });
+  child.stdout.on('data', (data) => {
+    const message = data.toString().trim();
+    if (message) log(prefix, color, message);
+  });
+  child.stderr.on('data', (data) => {
+    const message = data.toString().trim();
+    if (message) log(prefix, color, message);
+  });
   child.on('close', (code) => {
     if (!shuttingDown) {
       log(prefix, colors.red, `Process exited with code ${code}`);
@@ -36,9 +59,12 @@ function pipeProcess(prefix: string, color: string, command: string, args: strin
 
 async function portIsOpen(port: number) {
   return await new Promise<boolean>((resolve) => {
-      const socket = connect({ host: '127.0.0.1', port });
-      socket.once('connect', () => { socket.destroy(); resolve(true); });
-      socket.once('error', () => resolve(false));
+    const socket = connect({ host: '127.0.0.1', port });
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('error', () => resolve(false));
   });
 }
 
@@ -68,14 +94,28 @@ async function main() {
   log('DEV', colors.yellow, 'Starting development environment...');
   if (database.local) {
     if (await portIsOpen(database.port)) {
-      throw new Error(`Port ${database.port} is already in use. Set PGLITE_PORT and update the local DATABASE_URL to the same port.`);
+      throw new Error(
+        `Port ${database.port} is already in use. Set PGLITE_PORT and update the local DATABASE_URL to the same port.`,
+      );
     }
     log('DB', colors.green, 'Starting single-owner PGlite database...');
     pipeProcess('DB', colors.green, 'bun', ['run', 'scripts/dev-db.ts'], childEnv);
     await waitForPort(database.port);
   }
-  pipeProcess('NEXT', colors.blue, 'bun', ['next', 'dev', '-p', process.env.PORT || '7070'], childEnv);
-  pipeProcess('WORKER', colors.green, 'bun', ['--conditions=react-server', 'run', 'src/lib/worker.ts'], childEnv);
+  pipeProcess(
+    'NEXT',
+    colors.blue,
+    'bun',
+    ['next', 'dev', '-p', process.env.PORT || '7070'],
+    childEnv,
+  );
+  pipeProcess(
+    'WORKER',
+    colors.green,
+    'bun',
+    ['--conditions=react-server', 'run', 'src/lib/worker.ts'],
+    childEnv,
+  );
   process.stdin.resume();
 }
 

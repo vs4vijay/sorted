@@ -10,7 +10,11 @@ import {
   setupConflictState,
 } from '@/features/organizations/setup-conflicts';
 import { hashPassword } from '@/lib/auth/password';
-import { hashSessionToken, ORGANIZATION_COOKIE_NAME, SESSION_COOKIE_NAME } from '@/lib/auth/session';
+import {
+  hashSessionToken,
+  ORGANIZATION_COOKIE_NAME,
+  SESSION_COOKIE_NAME,
+} from '@/lib/auth/session';
 import { logError } from '@/lib/logger';
 
 export type SetupState = { message?: string; errors?: Record<string, string[]> };
@@ -18,7 +22,10 @@ export type SetupState = { message?: string; errors?: Record<string, string[]> }
 export async function completeSetup(_: SetupState, formData: FormData): Promise<SetupState> {
   const parsed = FirstRunSetupInputSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    return { message: 'Check the highlighted details.', errors: parsed.error.flatten().fieldErrors };
+    return {
+      message: 'Check the highlighted details.',
+      errors: parsed.error.flatten().fieldErrors,
+    };
   }
 
   const repository = new OrganizationAccessRepository();
@@ -50,9 +57,11 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
     });
   } catch (error) {
     logError('organization.setup_failed', error);
-    const databaseMessage = error instanceof Error && /relation .* does not exist|database|pglite|mutex|connection/i.test(error.message)
-      ? 'The recruiting workspace database is not ready. Restart the local app so setup can initialize it, then try again.'
-      : undefined;
+    const databaseMessage =
+      error instanceof Error &&
+      /relation .* does not exist|database|pglite|mutex|connection/i.test(error.message)
+        ? 'The recruiting workspace database is not ready. Restart the local app so setup can initialize it, then try again.'
+        : undefined;
     return (
       mapUniqueViolationToSetupState(error) ?? {
         message: databaseMessage ?? 'We could not create the workspace. Try again in a moment.',

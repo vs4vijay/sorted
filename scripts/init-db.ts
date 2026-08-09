@@ -3,9 +3,9 @@
 import { PGlite } from '@electric-sql/pglite';
 
 export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } = {}) {
-    console.log('📋 Creating tables...');
+  console.log('📋 Creating tables...');
 
-    await pglite.exec(`
+  await pglite.exec(`
       CREATE TABLE IF NOT EXISTS items (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -15,9 +15,9 @@ export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } =
       );
     `);
 
-    console.log('🏢 Creating organization and access tables...');
+  console.log('🏢 Creating organization and access tables...');
 
-    await pglite.exec(`
+  await pglite.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         email TEXT NOT NULL,
@@ -92,8 +92,8 @@ export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } =
       CREATE INDEX IF NOT EXISTS audit_events_subject_idx ON audit_events (organization_id, subject_type, subject_id);
     `);
 
-    console.log('📋 Creating position and rubric tables...');
-    await pglite.exec(`
+  console.log('📋 Creating position and rubric tables...');
+  await pglite.exec(`
       CREATE TABLE IF NOT EXISTS positions (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','rubric_review','screening','closed')), employment_type TEXT NOT NULL, location TEXT, workplace_preference TEXT, compensation_min INTEGER, compensation_max INTEGER, minimum_experience INTEGER, preferred_experience INTEGER, notice_period_days INTEGER, shift_travel TEXT, work_authorization TEXT, created_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE INDEX IF NOT EXISTS positions_org_created_idx ON positions(organization_id, created_at);
       CREATE TABLE IF NOT EXISTS provider_executions (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, provider TEXT NOT NULL, operation TEXT NOT NULL, model TEXT NOT NULL, prompt_version TEXT NOT NULL, schema_version TEXT NOT NULL, provider_request_id TEXT, latency_ms INTEGER, status TEXT NOT NULL, normalized_error JSON, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -107,8 +107,8 @@ export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } =
       CREATE INDEX IF NOT EXISTS voice_notes_org_position_idx ON voice_notes(organization_id,position_id,created_at);
     `);
 
-    console.log('👥 Creating candidate ingestion tables...');
-    await pglite.exec(`
+  console.log('👥 Creating candidate ingestion tables...');
+  await pglite.exec(`
       CREATE TABLE IF NOT EXISTS candidates (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, display_name TEXT NOT NULL, headline TEXT, location TEXT, profile_status TEXT NOT NULL DEFAULT 'unreviewed', merged_into_id TEXT, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS ingestion_runs (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, position_id TEXT, source_type TEXT NOT NULL, status TEXT NOT NULL, total_count INTEGER NOT NULL, completed_count INTEGER NOT NULL DEFAULT 0, failed_count INTEGER NOT NULL DEFAULT 0, created_by_id TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS candidate_sources (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, candidate_id TEXT REFERENCES candidates(id), ingestion_run_id TEXT NOT NULL REFERENCES ingestion_runs(id) ON DELETE CASCADE, source_type TEXT NOT NULL, permission_method TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'uploaded' CHECK(status IN ('uploaded','scanning','extracting','parsed','needs_review','failed','quarantined')), source_label TEXT NOT NULL, imported_by_id TEXT NOT NULL, imported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, warnings JSON NOT NULL DEFAULT '[]'::JSON);
@@ -186,9 +186,9 @@ export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } =
       CREATE INDEX IF NOT EXISTS rate_limit_events_scope_idx ON rate_limit_events(organization_id,actor_id,action,created_at);
     `);
 
-    console.log('⚙️  Creating Jobs table...');
+  console.log('⚙️  Creating Jobs table...');
 
-    await pglite.exec(`
+  await pglite.exec(`
       CREATE TABLE IF NOT EXISTS jobs (
         id TEXT PRIMARY KEY,
         task_identifier TEXT NOT NULL,
@@ -213,13 +213,13 @@ export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } =
       CREATE INDEX IF NOT EXISTS jobs_key_idx ON jobs (key);
     `);
 
-    console.log('✅ Database schema created successfully');
+  console.log('✅ Database schema created successfully');
 
-    if (!options.seed) return;
+  if (!options.seed) return;
 
-    console.log('🌱 Seeding database...');
+  console.log('🌱 Seeding database...');
 
-    await pglite.exec(`
+  await pglite.exec(`
       INSERT INTO users (id,email,name) VALUES ('local-dev-user','developer@sorted.local','Local Developer') ON CONFLICT (id) DO NOTHING;
       INSERT INTO organizations (id,name,slug,timezone,default_locale) VALUES ('local-dev-organization','Sorted Local Workspace','sorted-local','Asia/Kolkata','en-IN') ON CONFLICT (id) DO NOTHING;
       INSERT INTO organization_members (id,organization_id,user_id,role) VALUES ('local-dev-membership','local-dev-organization','local-dev-user','admin') ON CONFLICT (organization_id,user_id) DO NOTHING;
@@ -261,21 +261,22 @@ export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } =
       ON CONFLICT (id) DO NOTHING;
     `);
 
-    console.log('✅ Seeded 3 persisted recruiting positions and balanced rubrics');
-    console.log('🎉 Database initialization complete!');
-    console.log('');
-    console.log('Next steps:');
-    console.log('  1. Run: bun run dev');
-    console.log('  2. Visit: http://localhost:7070');
-    console.log('  3. Check jobs: http://localhost:7070/jobs');
-
+  console.log('✅ Seeded 3 persisted recruiting positions and balanced rubrics');
+  console.log('🎉 Database initialization complete!');
+  console.log('');
+  console.log('Next steps:');
+  console.log('  1. Run: bun run dev');
+  console.log('  2. Visit: http://localhost:7070');
+  console.log('  3. Check jobs: http://localhost:7070/jobs');
 }
 
 async function main() {
   console.log('🗄️  Initializing PGlite database...');
   const databaseUrl = process.env.DATABASE_URL || 'file:./dev.db';
   if (!databaseUrl.startsWith('file:')) {
-    throw new Error('This script only initializes a file-backed PGlite database. Use bun run db:migrate for PostgreSQL.');
+    throw new Error(
+      'This script only initializes a file-backed PGlite database. Use bun run db:migrate for PostgreSQL.',
+    );
   }
 
   const pglite = new PGlite(databaseUrl.replace('file:', ''));

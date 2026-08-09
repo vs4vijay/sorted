@@ -50,16 +50,11 @@ export function JobStats({ stats }: JobStatsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       {statCards.map((stat) => (
-        <div
-          key={stat.label}
-          className={`${stat.bgColor} rounded-lg p-6 border border-gray-200`}
-        >
+        <div key={stat.label} className={`${stat.bgColor} rounded-lg p-6 border border-gray-200`}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-              <p className={`text-3xl font-bold ${stat.textColor} mt-2`}>
-                {stat.value}
-              </p>
+              <p className={`text-3xl font-bold ${stat.textColor} mt-2`}>{stat.value}</p>
             </div>
             <div className={`w-3 h-3 rounded-full ${stat.color}`}></div>
           </div>

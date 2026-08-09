@@ -16,7 +16,9 @@ function rowToJob(row: JobRow): Job {
   return {
     id: String(row.id),
     taskIdentifier: String(row.task_identifier),
-    payload: (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as JobPayload,
+    payload: (typeof row.payload === 'string'
+      ? JSON.parse(row.payload)
+      : row.payload) as JobPayload,
     status: String(row.status) as Job['status'],
     priority: Number(row.priority),
     runAt: new Date(String(row.run_at)),
@@ -36,7 +38,7 @@ export class PostgresQueue implements IQueue {
   async enqueue<T extends JobPayload = JobPayload>(
     taskIdentifier: string,
     payload: T,
-    options?: JobOptions
+    options?: JobOptions,
   ): Promise<Job> {
     const id = generateId();
     const runAt = options?.runAt || new Date();
@@ -48,7 +50,7 @@ export class PostgresQueue implements IQueue {
     if (jobKey) {
       const existing = await executeQuery<{ id: string }>(
         `SELECT id FROM jobs WHERE key = $1 AND status IN ('pending', 'active')`,
-        [jobKey]
+        [jobKey],
       );
       if (existing.length > 0) {
         throw new Error(`Job with key ${jobKey} already exists`);
@@ -70,26 +72,23 @@ export class PostgresQueue implements IQueue {
         maxAttempts,
         jobKey,
         queue,
-      ]
+      ],
     );
 
     const job = rowToJob(result[0]);
 
     // Prisma cannot deserialize pg_notify's void return, so wrap it to
     // project a single integer column.
-    await executeQuery(
-      `SELECT 1 FROM (SELECT pg_notify($1, $2)) AS notify_result`,
-      [CHANNEL_NAME, JSON.stringify({ jobId: job.id })]
-    );
+    await executeQuery(`SELECT 1 FROM (SELECT pg_notify($1, $2)) AS notify_result`, [
+      CHANNEL_NAME,
+      JSON.stringify({ jobId: job.id }),
+    ]);
 
     return job;
   }
 
   async getJob(id: string): Promise<Job | null> {
-    const result = await executeQuery(
-      `SELECT * FROM jobs WHERE id = $1`,
-      [id]
-    );
+    const result = await executeQuery(`SELECT * FROM jobs WHERE id = $1`, [id]);
     return result.length > 0 ? rowToJob(result[0]) : null;
   }
 
@@ -134,7 +133,7 @@ export class PostgresQueue implements IQueue {
          LIMIT 1 FOR UPDATE SKIP LOCKED
        )
        RETURNING *`,
-      [workerId]
+      [workerId],
     );
 
     return result.length > 0 ? rowToJob(result[0]) : null;
@@ -143,7 +142,7 @@ export class PostgresQueue implements IQueue {
   async completeJob(id: string): Promise<void> {
     await executeQuery(
       `UPDATE jobs SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
-      [id]
+      [id],
     );
   }
 
@@ -153,14 +152,14 @@ export class PostgresQueue implements IQueue {
        SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
            last_error = $1, locked_at = NULL, locked_by = NULL, updated_at = NOW()
        WHERE id = $2`,
-      [error, id]
+      [error, id],
     );
   }
 
   async releaseJob(id: string): Promise<void> {
     await executeQuery(
       `UPDATE jobs SET status = 'pending', locked_at = NULL, locked_by = NULL, updated_at = NOW() WHERE id = $1`,
-      [id]
+      [id],
     );
   }
 
@@ -173,7 +172,7 @@ export class PostgresQueue implements IQueue {
       `SELECT * FROM jobs
        WHERE status = 'pending' AND run_at <= NOW()
        ORDER BY priority DESC, run_at ASC
-       LIMIT 1 FOR UPDATE SKIP LOCKED`
+       LIMIT 1 FOR UPDATE SKIP LOCKED`,
     );
 
     if (result.length === 0) {
@@ -182,7 +181,7 @@ export class PostgresQueue implements IQueue {
 
     await executeQuery(
       `UPDATE jobs SET status = 'active', locked_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1`,
-      [result[0].id]
+      [result[0].id],
     );
 
     const updated = await executeQuery(`SELECT * FROM jobs WHERE id = $1`, [result[0].id]);
@@ -206,7 +205,9 @@ export class PostgresQueue implements IQueue {
         console.warn('⚠️  Job notifications disconnected; polling remains active.');
       });
       await client.query(`LISTEN ${CHANNEL_NAME}`);
-      return () => { void client.end(); };
+      return () => {
+        void client.end();
+      };
     } catch {
       await client.end().catch(() => undefined);
       console.warn('⚠️  Could not subscribe to job notifications; polling remains active.');

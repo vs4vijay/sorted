@@ -5,18 +5,101 @@ type Query = (sql: string, params?: unknown[]) => Promise<unknown[]>;
 
 export class PositionRepository {
   constructor(private readonly query: Query = executeQuery) {}
-  async create(input: { id: string; organizationId: string; actorId: string; title: string; employmentType: string; location: string; workplacePreference: string; rawText: string; structured: StructuredJobDescription; execution: StructuringResult['execution']; jobDescriptionId: string; rubricId: string; executionId: string; auditId: string }): Promise<void> {
-    await this.query(`WITH p AS (INSERT INTO positions(id,organization_id,title,status,employment_type,location,workplace_preference,minimum_experience,preferred_experience,created_by_id) VALUES($1,$2,$3,'rubric_review',$4,NULLIF($5,''),NULLIF($6,''),$7,$8,$9)), e AS (INSERT INTO provider_executions(id,organization_id,provider,operation,model,prompt_version,schema_version,provider_request_id,latency_ms,status,normalized_error) VALUES($10,$2,$11,'job_description.structure',$12,$13,$14,$15,$16,$17,$18::JSON)), j AS (INSERT INTO job_descriptions(id,organization_id,position_id,version,source_type,raw_text,structured_data,extraction_mode,provider_execution_id,created_by_id) VALUES($19,$2,$1,1,$20,NULLIF($21,''),$22::JSON,$23,$10,$9)), r AS (INSERT INTO evaluation_rubrics(id,organization_id,position_id,version,status,created_by_id) VALUES($24,$2,$1,1,'draft',$9)) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) VALUES($25,$2,$9,'position.created','position',$1,json_build_object('rubric_version',1,'extraction_mode',$23::TEXT))`, [input.id,input.organizationId,input.title,input.employmentType,input.location,input.workplacePreference,input.structured.minimumExperience,input.structured.preferredExperience,input.actorId,input.executionId,input.execution.provider,input.execution.model,input.execution.promptVersion,input.execution.schemaVersion,input.execution.requestId ?? null,input.execution.latencyMs,input.execution.status,JSON.stringify(input.execution.error ?? null),input.jobDescriptionId,input.rawText ? 'pasted' : 'manual',input.rawText,JSON.stringify(input.structured),input.execution.status,input.rubricId,input.auditId]);
-    for (const [index, criterion] of input.structured.criteria.entries()) await this.query(`INSERT INTO rubric_criteria(id,organization_id,rubric_id,name,description,criterion_type,classification,weight,evidence_expectations,display_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [crypto.randomUUID(),input.organizationId,input.rubricId,criterion.name,criterion.description,criterion.criterionType,criterion.classification,criterion.weight,criterion.evidenceExpectations,index]);
+  async create(input: {
+    id: string;
+    organizationId: string;
+    actorId: string;
+    title: string;
+    employmentType: string;
+    location: string;
+    workplacePreference: string;
+    rawText: string;
+    structured: StructuredJobDescription;
+    execution: StructuringResult['execution'];
+    jobDescriptionId: string;
+    rubricId: string;
+    executionId: string;
+    auditId: string;
+  }): Promise<void> {
+    await this.query(
+      `WITH p AS (INSERT INTO positions(id,organization_id,title,status,employment_type,location,workplace_preference,minimum_experience,preferred_experience,created_by_id) VALUES($1,$2,$3,'rubric_review',$4,NULLIF($5,''),NULLIF($6,''),$7,$8,$9)), e AS (INSERT INTO provider_executions(id,organization_id,provider,operation,model,prompt_version,schema_version,provider_request_id,latency_ms,status,normalized_error) VALUES($10,$2,$11,'job_description.structure',$12,$13,$14,$15,$16,$17,$18::JSON)), j AS (INSERT INTO job_descriptions(id,organization_id,position_id,version,source_type,raw_text,structured_data,extraction_mode,provider_execution_id,created_by_id) VALUES($19,$2,$1,1,$20,NULLIF($21,''),$22::JSON,$23,$10,$9)), r AS (INSERT INTO evaluation_rubrics(id,organization_id,position_id,version,status,created_by_id) VALUES($24,$2,$1,1,'draft',$9)) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) VALUES($25,$2,$9,'position.created','position',$1,json_build_object('rubric_version',1,'extraction_mode',$23::TEXT))`,
+      [
+        input.id,
+        input.organizationId,
+        input.title,
+        input.employmentType,
+        input.location,
+        input.workplacePreference,
+        input.structured.minimumExperience,
+        input.structured.preferredExperience,
+        input.actorId,
+        input.executionId,
+        input.execution.provider,
+        input.execution.model,
+        input.execution.promptVersion,
+        input.execution.schemaVersion,
+        input.execution.requestId ?? null,
+        input.execution.latencyMs,
+        input.execution.status,
+        JSON.stringify(input.execution.error ?? null),
+        input.jobDescriptionId,
+        input.rawText ? 'pasted' : 'manual',
+        input.rawText,
+        JSON.stringify(input.structured),
+        input.execution.status,
+        input.rubricId,
+        input.auditId,
+      ],
+    );
+    for (const [index, criterion] of input.structured.criteria.entries())
+      await this.query(
+        `INSERT INTO rubric_criteria(id,organization_id,rubric_id,name,description,criterion_type,classification,weight,evidence_expectations,display_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [
+          crypto.randomUUID(),
+          input.organizationId,
+          input.rubricId,
+          criterion.name,
+          criterion.description,
+          criterion.criterionType,
+          criterion.classification,
+          criterion.weight,
+          criterion.evidenceExpectations,
+          index,
+        ],
+      );
   }
-  async list(organizationId: string) { return this.query(`SELECT p.*, r.status AS rubric_status, r.version AS rubric_version FROM positions p LEFT JOIN evaluation_rubrics r ON r.position_id=p.id AND r.organization_id=p.organization_id WHERE p.organization_id=$1 ORDER BY p.created_at DESC`, [organizationId]) as Promise<Record<string,unknown>[]>; }
-  async get(organizationId: string, positionId: string): Promise<(Record<string,unknown> & { criteria: Record<string,unknown>[] }) | null> {
-    const positions = await this.query(`SELECT p.*,r.id AS rubric_id,r.status AS rubric_status,r.version AS rubric_version,j.structured_data,j.extraction_mode FROM positions p LEFT JOIN evaluation_rubrics r ON r.position_id=p.id AND r.organization_id=p.organization_id LEFT JOIN job_descriptions j ON j.position_id=p.id AND j.version=r.version AND j.organization_id=p.organization_id WHERE p.organization_id=$1 AND p.id=$2 ORDER BY r.version DESC LIMIT 1`,[organizationId,positionId]) as Record<string,unknown>[];
+  async list(organizationId: string) {
+    return this.query(
+      `SELECT p.*, r.status AS rubric_status, r.version AS rubric_version FROM positions p LEFT JOIN evaluation_rubrics r ON r.position_id=p.id AND r.organization_id=p.organization_id WHERE p.organization_id=$1 ORDER BY p.created_at DESC`,
+      [organizationId],
+    ) as Promise<Record<string, unknown>[]>;
+  }
+  async get(
+    organizationId: string,
+    positionId: string,
+  ): Promise<(Record<string, unknown> & { criteria: Record<string, unknown>[] }) | null> {
+    const positions = (await this.query(
+      `SELECT p.*,r.id AS rubric_id,r.status AS rubric_status,r.version AS rubric_version,j.structured_data,j.extraction_mode FROM positions p LEFT JOIN evaluation_rubrics r ON r.position_id=p.id AND r.organization_id=p.organization_id LEFT JOIN job_descriptions j ON j.position_id=p.id AND j.version=r.version AND j.organization_id=p.organization_id WHERE p.organization_id=$1 AND p.id=$2 ORDER BY r.version DESC LIMIT 1`,
+      [organizationId, positionId],
+    )) as Record<string, unknown>[];
     if (!positions[0]) return null;
-    const criteria = await this.query(`SELECT * FROM rubric_criteria WHERE organization_id=$1 AND rubric_id=$2 ORDER BY display_order`,[organizationId,positions[0].rubric_id]) as Record<string,unknown>[];
+    const criteria = (await this.query(
+      `SELECT * FROM rubric_criteria WHERE organization_id=$1 AND rubric_id=$2 ORDER BY display_order`,
+      [organizationId, positions[0].rubric_id],
+    )) as Record<string, unknown>[];
     return { ...positions[0], criteria };
   }
-  async approve(input: { organizationId:string; positionId:string; rubricId:string; actorId:string; auditId:string }) {
-    const rows = await this.query(`WITH approved AS (UPDATE evaluation_rubrics SET status='approved',approved_by_id=$4,approved_at=CURRENT_TIMESTAMP WHERE id=$3 AND organization_id=$1 AND position_id=$2 AND status='draft' AND (SELECT COALESCE(SUM(weight),0) FROM rubric_criteria WHERE organization_id=$1 AND rubric_id=$3 AND classification<>'informational')=100 RETURNING id,version), positioned AS (UPDATE positions SET status='screening',updated_at=CURRENT_TIMESTAMP WHERE id=$2 AND organization_id=$1 AND EXISTS(SELECT 1 FROM approved)) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) SELECT $5,$1,$4,'rubric.approved','evaluation_rubric',id,json_build_object('version',version) FROM approved RETURNING id`,[input.organizationId,input.positionId,input.rubricId,input.actorId,input.auditId]); return rows.length > 0;
+  async approve(input: {
+    organizationId: string;
+    positionId: string;
+    rubricId: string;
+    actorId: string;
+    auditId: string;
+  }) {
+    const rows = await this.query(
+      `WITH approved AS (UPDATE evaluation_rubrics SET status='approved',approved_by_id=$4,approved_at=CURRENT_TIMESTAMP WHERE id=$3 AND organization_id=$1 AND position_id=$2 AND status='draft' AND (SELECT COALESCE(SUM(weight),0) FROM rubric_criteria WHERE organization_id=$1 AND rubric_id=$3 AND classification<>'informational')=100 RETURNING id,version), positioned AS (UPDATE positions SET status='screening',updated_at=CURRENT_TIMESTAMP WHERE id=$2 AND organization_id=$1 AND EXISTS(SELECT 1 FROM approved)) INSERT INTO audit_events(id,organization_id,actor_user_id,action,subject_type,subject_id,metadata) SELECT $5,$1,$4,'rubric.approved','evaluation_rubric',id,json_build_object('version',version) FROM approved RETURNING id`,
+      [input.organizationId, input.positionId, input.rubricId, input.actorId, input.auditId],
+    );
+    return rows.length > 0;
   }
 }

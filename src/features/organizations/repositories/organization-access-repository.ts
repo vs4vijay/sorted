@@ -36,7 +36,7 @@ export class OrganizationAccessRepository {
     sessionTokenHash: string,
     preferredOrganizationSlug?: string,
   ): Promise<ResolvedOrganizationAccess | null> {
-    const rows = await this.query(
+    const rows = (await this.query(
       `SELECT
         sessions.id AS session_id,
         users.id AS user_id,
@@ -63,7 +63,7 @@ export class OrganizationAccessRepository {
       ORDER BY organization_members.created_at ASC
       LIMIT 1`,
       [sessionTokenHash, preferredOrganizationSlug ?? null],
-    ) as AccessRow[];
+    )) as AccessRow[];
 
     const row = rows[0];
     if (!row) return null;
@@ -97,7 +97,7 @@ export class OrganizationAccessRepository {
    * environment guard in `src/lib/auth/session.ts`.
    */
   async ensureLocalDevelopmentAccess(): Promise<ResolvedOrganizationAccess> {
-    const rows = await this.query(
+    const rows = (await this.query(
       `WITH ensured_user AS (
         INSERT INTO users (id, email, name)
         VALUES ('local-dev-user', 'developer@sorted.local', 'Local Developer')
@@ -132,7 +132,7 @@ export class OrganizationAccessRepository {
       FROM ensured_membership
       CROSS JOIN ensured_user
       CROSS JOIN ensured_organization`,
-    ) as AccessRow[];
+    )) as AccessRow[];
 
     const row = rows[0];
     if (!row) throw new Error('Could not provision the local development identity.');
@@ -159,13 +159,16 @@ export class OrganizationAccessRepository {
     });
   }
 
-  async findSetupConflicts(email: string, organizationSlug: string): Promise<{ emailTaken: boolean; slugTaken: boolean }> {
-    const rows = await this.query(
+  async findSetupConflicts(
+    email: string,
+    organizationSlug: string,
+  ): Promise<{ emailTaken: boolean; slugTaken: boolean }> {
+    const rows = (await this.query(
       `SELECT
         EXISTS(SELECT 1 FROM users WHERE LOWER(email) = LOWER($1)) AS email_taken,
         EXISTS(SELECT 1 FROM organizations WHERE slug = $2) AS slug_taken`,
       [email, organizationSlug],
-    ) as { email_taken: boolean; slug_taken: boolean }[];
+    )) as { email_taken: boolean; slug_taken: boolean }[];
     const row = rows[0];
     return {
       emailTaken: Boolean(row?.email_taken),
@@ -225,15 +228,29 @@ export class OrganizationAccessRepository {
     );
   }
 
-  async createSession(input: { id: string; userId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
-    await this.query(`INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)`, [input.id, input.userId, input.tokenHash, input.expiresAt]);
+  async createSession(input: {
+    id: string;
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.query(
+      `INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)`,
+      [input.id, input.userId, input.tokenHash, input.expiresAt],
+    );
   }
 
   async revokeSession(sessionId: string): Promise<void> {
-    await this.query(`UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP WHERE id = $1 AND revoked_at IS NULL`, [sessionId]);
+    await this.query(
+      `UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP WHERE id = $1 AND revoked_at IS NULL`,
+      [sessionId],
+    );
   }
 
-  async listMembers(organizationId: string, currentUserId: string): Promise<OrganizationMemberView[]> {
+  async listMembers(
+    organizationId: string,
+    currentUserId: string,
+  ): Promise<OrganizationMemberView[]> {
     const rows = await this.query(
       `SELECT organization_members.id, users.name, users.email, organization_members.role,
         organization_members.created_at AS joined_at,
@@ -244,11 +261,13 @@ export class OrganizationAccessRepository {
       ORDER BY organization_members.created_at ASC`,
       [organizationId, currentUserId],
     );
-    return rows.map((row) => OrganizationMemberViewSchema.parse({
-      ...(row as Record<string, unknown>),
-      joinedAt: (row as Record<string, unknown>).joined_at,
-      isCurrentUser: (row as Record<string, unknown>).is_current_user,
-    }));
+    return rows.map((row) =>
+      OrganizationMemberViewSchema.parse({
+        ...(row as Record<string, unknown>),
+        joinedAt: (row as Record<string, unknown>).joined_at,
+        isCurrentUser: (row as Record<string, unknown>).is_current_user,
+      }),
+    );
   }
 
   async listInvitations(organizationId: string): Promise<InvitationView[]> {
@@ -261,15 +280,26 @@ export class OrganizationAccessRepository {
       ORDER BY created_at DESC`,
       [organizationId],
     );
-    return rows.map((row) => InvitationViewSchema.parse({
-      ...(row as Record<string, unknown>),
-      expiresAt: (row as Record<string, unknown>).expires_at,
-      createdAt: (row as Record<string, unknown>).created_at,
-    }));
+    return rows.map((row) =>
+      InvitationViewSchema.parse({
+        ...(row as Record<string, unknown>),
+        expiresAt: (row as Record<string, unknown>).expires_at,
+        createdAt: (row as Record<string, unknown>).created_at,
+      }),
+    );
   }
 
-  async createInvitation(input: { id: string; organizationId: string; email: string; role: OrganizationRole; tokenHash: string; invitedById: string; expiresAt: Date; auditEventId: string }): Promise<boolean> {
-    const rows = await this.query(
+  async createInvitation(input: {
+    id: string;
+    organizationId: string;
+    email: string;
+    role: OrganizationRole;
+    tokenHash: string;
+    invitedById: string;
+    expiresAt: Date;
+    auditEventId: string;
+  }): Promise<boolean> {
+    const rows = (await this.query(
       `WITH created_invitation AS (
         INSERT INTO invitations (id, organization_id, email, role, token_hash, invited_by_id, expires_at)
         SELECT $1, $2, LOWER($3), $4, $5, $6, $7
@@ -284,13 +314,27 @@ export class OrganizationAccessRepository {
         json_build_object('email', $3::TEXT, 'role', $4::TEXT)
       FROM created_invitation
       ) SELECT EXISTS(SELECT 1 FROM created_invitation) AS created`,
-      [input.id, input.organizationId, input.email, input.role, input.tokenHash, input.invitedById, input.expiresAt, input.auditEventId],
-    ) as { created: boolean }[];
+      [
+        input.id,
+        input.organizationId,
+        input.email,
+        input.role,
+        input.tokenHash,
+        input.invitedById,
+        input.expiresAt,
+        input.auditEventId,
+      ],
+    )) as { created: boolean }[];
     return rows[0]?.created ?? false;
   }
 
-  async revokeInvitation(input: { invitationId: string; organizationId: string; actorUserId: string; auditEventId: string }): Promise<boolean> {
-    const rows = await this.query(
+  async revokeInvitation(input: {
+    invitationId: string;
+    organizationId: string;
+    actorUserId: string;
+    auditEventId: string;
+  }): Promise<boolean> {
+    const rows = (await this.query(
       `WITH revoked AS (
         UPDATE invitations SET status = 'revoked', updated_at = CURRENT_TIMESTAMP
         WHERE id = $1 AND organization_id = $2 AND status = 'pending' AND expires_at > CURRENT_TIMESTAMP
@@ -300,29 +344,47 @@ export class OrganizationAccessRepository {
         SELECT $4, $2, $3, 'invitation.revoked', 'invitation', id, json_build_object('email', email, 'role', role) FROM revoked
       ) SELECT EXISTS(SELECT 1 FROM revoked) AS revoked`,
       [input.invitationId, input.organizationId, input.actorUserId, input.auditEventId],
-    ) as { revoked: boolean }[];
+    )) as { revoked: boolean }[];
     return rows[0]?.revoked ?? false;
   }
 
   async findInvitationByTokenHash(tokenHash: string): Promise<InvitationAcceptanceView | null> {
-    const rows = await this.query(
+    const rows = (await this.query(
       `SELECT invitations.id AS invitation_id, invitations.organization_id,
         organizations.name AS organization_name, organizations.slug AS organization_slug,
         invitations.email, invitations.role,
         CASE WHEN invitations.status = 'pending' AND invitations.expires_at <= CURRENT_TIMESTAMP THEN 'expired' ELSE invitations.status END AS status,
         invitations.expires_at
       FROM invitations INNER JOIN organizations ON organizations.id = invitations.organization_id
-      WHERE invitations.token_hash = $1 AND organizations.status = 'active' LIMIT 1`, [tokenHash],
-    ) as Record<string, unknown>[];
+      WHERE invitations.token_hash = $1 AND organizations.status = 'active' LIMIT 1`,
+      [tokenHash],
+    )) as Record<string, unknown>[];
     const row = rows[0];
     if (!row) return null;
-    return InvitationAcceptanceViewSchema.parse({ invitationId: row.invitation_id, organizationId: row.organization_id,
-      organizationName: row.organization_name, organizationSlug: row.organization_slug, email: row.email,
-      role: row.role, status: row.status, expiresAt: row.expires_at });
+    return InvitationAcceptanceViewSchema.parse({
+      invitationId: row.invitation_id,
+      organizationId: row.organization_id,
+      organizationName: row.organization_name,
+      organizationSlug: row.organization_slug,
+      email: row.email,
+      role: row.role,
+      status: row.status,
+      expiresAt: row.expires_at,
+    });
   }
 
-  async acceptInvitation(input: { tokenHash: string; name: string; passwordHash: string; userId: string; membershipId: string; sessionId: string; sessionTokenHash: string; sessionExpiresAt: Date; auditEventId: string }): Promise<{ organizationSlug: string } | null> {
-    const rows = await this.query(
+  async acceptInvitation(input: {
+    tokenHash: string;
+    name: string;
+    passwordHash: string;
+    userId: string;
+    membershipId: string;
+    sessionId: string;
+    sessionTokenHash: string;
+    sessionExpiresAt: Date;
+    auditEventId: string;
+  }): Promise<{ organizationSlug: string } | null> {
+    const rows = (await this.query(
       `WITH eligible AS (
         SELECT invitations.id, invitations.organization_id, invitations.email, invitations.role, organizations.slug
         FROM invitations INNER JOIN organizations ON organizations.id = invitations.organization_id
@@ -349,13 +411,29 @@ export class OrganizationAccessRepository {
         FROM accepted CROSS JOIN ensured_user WHERE EXISTS (SELECT 1 FROM created_session)
       ) SELECT eligible.slug AS organization_slug FROM eligible
       WHERE EXISTS (SELECT 1 FROM accepted) AND EXISTS (SELECT 1 FROM created_session)`,
-      [input.tokenHash, input.userId, input.name, input.membershipId, input.sessionId, input.sessionTokenHash, input.sessionExpiresAt, input.auditEventId, input.passwordHash],
-    ) as { organization_slug: string }[];
+      [
+        input.tokenHash,
+        input.userId,
+        input.name,
+        input.membershipId,
+        input.sessionId,
+        input.sessionTokenHash,
+        input.sessionExpiresAt,
+        input.auditEventId,
+        input.passwordHash,
+      ],
+    )) as { organization_slug: string }[];
     return rows[0] ? { organizationSlug: rows[0].organization_slug } : null;
   }
 
-  async updateMemberRole(input: { organizationId: string; membershipId: string; actorUserId: string; role: OrganizationRole; auditEventId: string }): Promise<boolean> {
-    const rows = await this.query(
+  async updateMemberRole(input: {
+    organizationId: string;
+    membershipId: string;
+    actorUserId: string;
+    role: OrganizationRole;
+    auditEventId: string;
+  }): Promise<boolean> {
+    const rows = (await this.query(
       `WITH previous AS (
         SELECT id, role FROM organization_members WHERE id = $1 AND organization_id = $2
       ), updated AS (
@@ -370,7 +448,7 @@ export class OrganizationAccessRepository {
       )
       SELECT EXISTS(SELECT 1 FROM updated) AS changed`,
       [input.membershipId, input.organizationId, input.role, input.actorUserId, input.auditEventId],
-    ) as { changed: boolean }[];
+    )) as { changed: boolean }[];
     return rows[0]?.changed ?? false;
   }
 }

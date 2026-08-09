@@ -11,7 +11,8 @@ if (process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production
 const host = '127.0.0.1';
 const port = Number(process.env.PGLITE_PORT || 5433);
 const dataDir = process.env.PGLITE_DATA_DIR || './dev.db';
-if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('PGLITE_PORT must be between 1024 and 65535.');
+if (!Number.isInteger(port) || port < 1024 || port > 65535)
+  throw new Error('PGLITE_PORT must be between 1024 and 65535.');
 
 const db = new PGlite(dataDir);
 await db.waitReady;
@@ -30,6 +31,10 @@ async function stop() {
   process.exit(0);
 }
 
-process.on('SIGINT', () => { void stop(); });
-process.on('SIGTERM', () => { void stop(); });
+process.on('SIGINT', () => {
+  void stop();
+});
+process.on('SIGTERM', () => {
+  void stop();
+});
 process.stdin.resume();

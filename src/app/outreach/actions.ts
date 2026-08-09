@@ -1,16 +1,115 @@
 'use server';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { redirect } from 'next/navigation';import { revalidatePath } from 'next/cache';import { requireCurrentAccess } from '@/lib/auth/session';import { CandidateResponseInputSchema,ConfirmSuggestionInputSchema,CreateSequenceInputSchema,DraftMessageInputSchema,EditDraftInputSchema,MessageActionInputSchema,RecruiterScreeningInputSchema,SequenceActionInputSchema } from '@/features/outreach/schemas/outreach';import { DeleteCandidateAudioSchema, GenerateCandidateAudioSchema, RecordAudioPreferenceSchema } from '@/features/outreach/schemas/candidate-audio';import { OutreachRepository } from '@/features/outreach/repositories/outreach-repository';import { SequenceRepository } from '@/features/outreach/repositories/sequence-repository';import { CandidateAudioRepository } from '@/features/outreach/repositories/candidate-audio-repository';
-export async function createDraft(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=DraftMessageInputSchema.parse({shortlistDecisionId:formData.get('shortlistDecisionId'),purpose:formData.get('purpose'),requestedFields:formData.getAll('requestedFields')});const id=await new OutreachRepository().draft(a.organization.id,a.userId,input);redirect(`/outreach/${id}`)}
-export async function editDraft(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=EditDraftInputSchema.parse(Object.fromEntries(formData));await new OutreachRepository().edit(a.organization.id,a.userId,input);revalidatePath(`/outreach/${formData.get('threadId')}`)}
-export async function approveMessage(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const {messageId}=MessageActionInputSchema.parse(Object.fromEntries(formData));await new OutreachRepository().approve(a.organization.id,a.userId,messageId);revalidatePath(`/outreach/${formData.get('threadId')}`)}
-export type SendMessageState={error?:string};
-export async function sendMessage(_state:SendMessageState,formData:FormData):Promise<SendMessageState>{try{const a=await requireCurrentAccess('outreach:manage');await enforceRateLimit(a.organization.id,a.userId,'email_send');const {messageId}=MessageActionInputSchema.parse(Object.fromEntries(formData));await new OutreachRepository().send(a.organization.id,a.userId,messageId);revalidatePath(`/outreach/${formData.get('threadId')}`);revalidatePath('/outreach');return {}}catch(error){return {error:error instanceof Error?error.message:'The approved email could not be sent.'}}}
-export async function simulateResponse(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=CandidateResponseInputSchema.parse(Object.fromEntries(formData));await new OutreachRepository().response(a.organization.id,a.userId,input);revalidatePath(`/outreach/${input.threadId}`);revalidatePath('/outreach')}
-export async function confirmSuggestion(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=ConfirmSuggestionInputSchema.parse(Object.fromEntries(formData));await new OutreachRepository().confirm(a.organization.id,a.userId,input);revalidatePath(`/outreach/${formData.get('threadId')}`)}
-export async function createSequence(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=CreateSequenceInputSchema.parse(Object.fromEntries(formData));await new SequenceRepository().createAndEnroll(a.organization.id,a.userId,input);revalidatePath(`/outreach/${input.threadId}`)}
-export async function pauseSequence(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=SequenceActionInputSchema.parse(Object.fromEntries(formData));await new SequenceRepository().pause(a.organization.id,a.userId,input.enrollmentId);revalidatePath(`/outreach/${input.threadId}`)}
-export async function advanceToScreening(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=RecruiterScreeningInputSchema.parse(Object.fromEntries(formData));await new SequenceRepository().advance(a.organization.id,a.userId,input);revalidatePath(`/outreach/${input.threadId}`);revalidatePath('/outreach');revalidatePath('/')}
-export async function recordAudioOptIn(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=RecordAudioPreferenceSchema.parse(Object.fromEntries(formData));await new CandidateAudioRepository().recordOptIn(a.organization.id,a.userId,input);revalidatePath(`/outreach/${input.threadId}`)}
-export async function generateAudioPreview(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=GenerateCandidateAudioSchema.parse(Object.fromEntries(formData));await new CandidateAudioRepository().generate(a.organization.id,a.userId,input);revalidatePath(`/outreach/${input.threadId}`)}
-export async function deleteAudioPreview(formData:FormData){const a=await requireCurrentAccess('outreach:manage');const input=DeleteCandidateAudioSchema.parse(Object.fromEntries(formData));await new CandidateAudioRepository().remove(a.organization.id,a.userId,input.assetId);revalidatePath(`/outreach/${input.threadId}`)}
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { requireCurrentAccess } from '@/lib/auth/session';
+import {
+  CandidateResponseInputSchema,
+  ConfirmSuggestionInputSchema,
+  CreateSequenceInputSchema,
+  DraftMessageInputSchema,
+  EditDraftInputSchema,
+  MessageActionInputSchema,
+  RecruiterScreeningInputSchema,
+  SequenceActionInputSchema,
+} from '@/features/outreach/schemas/outreach';
+import {
+  DeleteCandidateAudioSchema,
+  GenerateCandidateAudioSchema,
+  RecordAudioPreferenceSchema,
+} from '@/features/outreach/schemas/candidate-audio';
+import { OutreachRepository } from '@/features/outreach/repositories/outreach-repository';
+import { SequenceRepository } from '@/features/outreach/repositories/sequence-repository';
+import { CandidateAudioRepository } from '@/features/outreach/repositories/candidate-audio-repository';
+export async function createDraft(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = DraftMessageInputSchema.parse({
+    shortlistDecisionId: formData.get('shortlistDecisionId'),
+    purpose: formData.get('purpose'),
+    requestedFields: formData.getAll('requestedFields'),
+  });
+  const id = await new OutreachRepository().draft(a.organization.id, a.userId, input);
+  redirect(`/outreach/${id}`);
+}
+export async function editDraft(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = EditDraftInputSchema.parse(Object.fromEntries(formData));
+  await new OutreachRepository().edit(a.organization.id, a.userId, input);
+  revalidatePath(`/outreach/${formData.get('threadId')}`);
+}
+export async function approveMessage(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const { messageId } = MessageActionInputSchema.parse(Object.fromEntries(formData));
+  await new OutreachRepository().approve(a.organization.id, a.userId, messageId);
+  revalidatePath(`/outreach/${formData.get('threadId')}`);
+}
+export type SendMessageState = { error?: string };
+export async function sendMessage(
+  _state: SendMessageState,
+  formData: FormData,
+): Promise<SendMessageState> {
+  try {
+    const a = await requireCurrentAccess('outreach:manage');
+    await enforceRateLimit(a.organization.id, a.userId, 'email_send');
+    const { messageId } = MessageActionInputSchema.parse(Object.fromEntries(formData));
+    await new OutreachRepository().send(a.organization.id, a.userId, messageId);
+    revalidatePath(`/outreach/${formData.get('threadId')}`);
+    revalidatePath('/outreach');
+    return {};
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'The approved email could not be sent.',
+    };
+  }
+}
+export async function simulateResponse(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = CandidateResponseInputSchema.parse(Object.fromEntries(formData));
+  await new OutreachRepository().response(a.organization.id, a.userId, input);
+  revalidatePath(`/outreach/${input.threadId}`);
+  revalidatePath('/outreach');
+}
+export async function confirmSuggestion(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = ConfirmSuggestionInputSchema.parse(Object.fromEntries(formData));
+  await new OutreachRepository().confirm(a.organization.id, a.userId, input);
+  revalidatePath(`/outreach/${formData.get('threadId')}`);
+}
+export async function createSequence(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = CreateSequenceInputSchema.parse(Object.fromEntries(formData));
+  await new SequenceRepository().createAndEnroll(a.organization.id, a.userId, input);
+  revalidatePath(`/outreach/${input.threadId}`);
+}
+export async function pauseSequence(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = SequenceActionInputSchema.parse(Object.fromEntries(formData));
+  await new SequenceRepository().pause(a.organization.id, a.userId, input.enrollmentId);
+  revalidatePath(`/outreach/${input.threadId}`);
+}
+export async function advanceToScreening(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = RecruiterScreeningInputSchema.parse(Object.fromEntries(formData));
+  await new SequenceRepository().advance(a.organization.id, a.userId, input);
+  revalidatePath(`/outreach/${input.threadId}`);
+  revalidatePath('/outreach');
+  revalidatePath('/');
+}
+export async function recordAudioOptIn(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = RecordAudioPreferenceSchema.parse(Object.fromEntries(formData));
+  await new CandidateAudioRepository().recordOptIn(a.organization.id, a.userId, input);
+  revalidatePath(`/outreach/${input.threadId}`);
+}
+export async function generateAudioPreview(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = GenerateCandidateAudioSchema.parse(Object.fromEntries(formData));
+  await new CandidateAudioRepository().generate(a.organization.id, a.userId, input);
+  revalidatePath(`/outreach/${input.threadId}`);
+}
+export async function deleteAudioPreview(formData: FormData) {
+  const a = await requireCurrentAccess('outreach:manage');
+  const input = DeleteCandidateAudioSchema.parse(Object.fromEntries(formData));
+  await new CandidateAudioRepository().remove(a.organization.id, a.userId, input.assetId);
+  revalidatePath(`/outreach/${input.threadId}`);
+}

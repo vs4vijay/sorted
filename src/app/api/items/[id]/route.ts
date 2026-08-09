@@ -19,31 +19,19 @@ type RouteContext = {
  * GET /api/items/[id]
  * Get a single item by ID
  */
-export async function GET(
-  request: NextRequest,
-  context: RouteContext
-) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const items = await executeQuery(
-      'SELECT * FROM items WHERE id = $1',
-      [id]
-    );
+    const items = await executeQuery('SELECT * FROM items WHERE id = $1', [id]);
 
     if (items.length === 0) {
-      return NextResponse.json(
-        { error: 'Item not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
 
     return NextResponse.json({ item: items[0] });
   } catch (error) {
     console.error('Failed to fetch item:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch item' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch item' }, { status: 500 });
   }
 }
 
@@ -51,10 +39,7 @@ export async function GET(
  * PATCH /api/items/[id]
  * Update an item
  */
-export async function PATCH(
-  request: NextRequest,
-  context: RouteContext
-) {
+export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
@@ -74,10 +59,7 @@ export async function PATCH(
     }
 
     if (updates.length === 0) {
-      return NextResponse.json(
-        { error: 'No fields to update' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
@@ -85,14 +67,11 @@ export async function PATCH(
 
     const result = await executeQuery(
       `UPDATE items SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-      values
+      values,
     );
 
     if (result.length === 0) {
-      return NextResponse.json(
-        { error: 'Item not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
 
     return NextResponse.json({ item: result[0] });
@@ -100,15 +79,12 @@ export async function PATCH(
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Validation failed', details: error.issues },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     console.error('Failed to update item:', error);
-    return NextResponse.json(
-      { error: 'Failed to update item' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to update item' }, { status: 500 });
   }
 }
 
@@ -116,31 +92,19 @@ export async function PATCH(
  * DELETE /api/items/[id]
  * Delete an item
  */
-export async function DELETE(
-  request: NextRequest,
-  context: RouteContext
-) {
+export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
 
-    const result = await executeQuery(
-      'DELETE FROM items WHERE id = $1 RETURNING id',
-      [id]
-    );
+    const result = await executeQuery('DELETE FROM items WHERE id = $1 RETURNING id', [id]);
 
     if (result.length === 0) {
-      return NextResponse.json(
-        { error: 'Item not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to delete item:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete item' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
   }
 }

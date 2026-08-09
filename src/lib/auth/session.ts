@@ -65,7 +65,9 @@ export async function requireCurrentAccess(
   return access;
 }
 
-export async function requirePageAccess(permission?: OrganizationPermission): Promise<ResolvedOrganizationAccess> {
+export async function requirePageAccess(
+  permission?: OrganizationPermission,
+): Promise<ResolvedOrganizationAccess> {
   const access = await getCurrentAccess();
   if (!access) redirect('/sign-in');
   if (permission && !roleCan(access.membership.role, permission)) {

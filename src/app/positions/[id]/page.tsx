@@ -8,8 +8,186 @@ import { VoiceNoteRepository } from '@/features/voice-notes/repositories/voice-n
 import { approveRubric, approveVoiceTranscript, deleteVoiceSource } from '../actions';
 import { VoiceNoteRecorder } from './voice-note-recorder';
 
-export default async function PositionDetailPage({params}:{params:Promise<{id:string}>}){
- const {id}=await params; const access=await getCurrentAccess(); if(!access) notFound(); const position=await new PositionRepository().get(access.organization.id,id); if(!position) notFound(); const voiceNotes: (Record<string,unknown>&{source_deleted_at:boolean})[]=(await new VoiceNoteRepository().listForPosition(access.organization.id,id)).map(note=>({...note,source_deleted_at:Boolean(note.source_deleted_at)}));
- const criteria=position.criteria as Record<string,unknown>[]; const approved=position.rubric_status==='approved'; const canApprove=roleCan(access.membership.role,'rubrics:approve'); const canManage=roleCan(access.membership.role,'positions:manage'); const structured=position.structured_data as {title?:string;seniority?:string;skills?:string[];responsibilities?:string[]}|null;
- return <AppShell active="positions"><div className="detail-title"><Link href="/positions">← Positions</Link><div className="page-header"><div><span className={`status ${position.status}`}>{String(position.status).replace('_',' ')}</span><h1>{String(position.title)}</h1><p>{String(position.location??'Location flexible')} · {String(position.employment_type)}</p></div></div></div><div className="tabs"><span className="active">Evaluation rubric</span><span>Position details</span><span>Hiring panel</span></div><div className="detail-grid"><section className="surface"><div className="section-heading"><div><span className="eyebrow">RUBRIC VERSION {String(position.rubric_version)}</span><h2>{approved?'Approved for screening':'Human approval required'}</h2></div><span className={`status ${approved?'screening':'draft'}`}>{String(position.rubric_status)}</span></div><p>{approved?'This immutable rubric version is ready for candidate evaluation.':'Review the AI-assisted criteria below. AI output cannot approve itself.'}</p>{criteria.map((criterion)=><article className="rubric-criterion" key={String(criterion.id)}><div><span className="eyebrow">{String(criterion.classification).replace('_',' ')}</span><h3>{String(criterion.name)}</h3><p>{String(criterion.description)}</p><small>Evidence: {String(criterion.evidence_expectations)}</small></div><strong>{String(criterion.weight)}%</strong></article>)}{!approved&&canApprove&&<form action={approveRubric.bind(null,id,String(position.rubric_id))}><button className="button primary">Approve rubric for screening</button></form>}{!approved&&!canApprove&&<p className="simulation-label">A hiring manager or administrator must approve this rubric.</p>}</section><aside className="surface overview-panel"><span className="eyebrow">STRUCTURED JD</span><h2>{structured?.title||String(position.title)||'Manual rubric'}</h2>{structured?.seniority&&<small>{structured.seniority}</small>}<p>{structured?.responsibilities?.join(' · ')||'No complete JD supplied.'}</p><div className="tag-list">{structured?.skills?.map(skill=><span className="tag" key={skill}>{skill}</span>)}</div><small className="simulation-label">{position.extraction_mode==='succeeded'?'Structured by Sarvam-105B':'Simulated deterministic structuring'} · requires human approval</small></aside></div><section className="surface voice-note-panel"><div className="section-heading"><div><span className="eyebrow">SAARAS VOICE NOTES</span><h2>Speak a requirement, then review it</h2></div><span className="status draft">Opt-in</span></div><p>Hindi, Hinglish, and Indian English stay private. A transcript never changes the rubric until a person approves it.</p>{canManage&&<VoiceNoteRecorder positionId={id}/>}<div className="voice-note-list">{voiceNotes.length===0?<div className="empty-state"><h3>No voice notes yet</h3><p>Record a short hiring requirement to create a reviewable transcript.</p></div>:voiceNotes.map(note=><article className="voice-note-card" key={String(note.id)}><div className="voice-note-meta"><strong>{String(note.purpose).replaceAll('_',' ')}</strong><span className={`stage ${String(note.status)}`}>{String(note.status)}</span><small>{String(note.language_code)} · {note.status==='succeeded'?'Transcribed by Saaras':'Simulated until a real Saaras call succeeds'}</small></div>{note.reviewed_at?<><blockquote>{String(note.reviewed_transcript)}</blockquote><p className="form-success">Human reviewed. Any suggested requirement was added only to a new draft rubric version.</p></>:canManage?<form action={approveVoiceTranscript} className="stack-form"><input type="hidden" name="voiceNoteId" value={String(note.id)}/><input type="hidden" name="positionId" value={id}/><label>Editable transcript<textarea name="transcript" rows={4} defaultValue={String(note.transcript??'')} required/></label><small>Review language and meaning before approval. This creates an informational draft criterion and never approves it.</small><button className="button primary">Approve transcript and add draft criterion</button></form>:<blockquote>{String(note.transcript)}</blockquote>}{canManage&&!note.source_deleted_at&&<form action={deleteVoiceSource.bind(null,id,String(note.id))}><button className="button ghost">Delete source audio</button></form>}{note.source_deleted_at&&<small>Source audio deleted; reviewed transcript and audit history retained.</small>}</article>)}</div></section></AppShell>;
+export default async function PositionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const access = await getCurrentAccess();
+  if (!access) notFound();
+  const position = await new PositionRepository().get(access.organization.id, id);
+  if (!position) notFound();
+  const voiceNotes: (Record<string, unknown> & { source_deleted_at: boolean })[] = (
+    await new VoiceNoteRepository().listForPosition(access.organization.id, id)
+  ).map((note) => ({ ...note, source_deleted_at: Boolean(note.source_deleted_at) }));
+  const criteria = position.criteria as Record<string, unknown>[];
+  const approved = position.rubric_status === 'approved';
+  const canApprove = roleCan(access.membership.role, 'rubrics:approve');
+  const canManage = roleCan(access.membership.role, 'positions:manage');
+  const structured = position.structured_data as {
+    title?: string;
+    seniority?: string;
+    skills?: string[];
+    responsibilities?: string[];
+  } | null;
+  return (
+    <AppShell active="positions">
+      <div className="detail-title">
+        <Link href="/positions">← Positions</Link>
+        <div className="page-header">
+          <div>
+            <span className={`status ${position.status}`}>
+              {String(position.status).replace('_', ' ')}
+            </span>
+            <h1>{String(position.title)}</h1>
+            <p>
+              {String(position.location ?? 'Location flexible')} ·{' '}
+              {String(position.employment_type)}
+            </p>
+          </div>
+        </div>
+      </div>
+      <div className="tabs">
+        <span className="active">Evaluation rubric</span>
+        <span>Position details</span>
+        <span>Hiring panel</span>
+      </div>
+      <div className="detail-grid">
+        <section className="surface">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">RUBRIC VERSION {String(position.rubric_version)}</span>
+              <h2>{approved ? 'Approved for screening' : 'Human approval required'}</h2>
+            </div>
+            <span className={`status ${approved ? 'screening' : 'draft'}`}>
+              {String(position.rubric_status)}
+            </span>
+          </div>
+          <p>
+            {approved
+              ? 'This immutable rubric version is ready for candidate evaluation.'
+              : 'Review the AI-assisted criteria below. AI output cannot approve itself.'}
+          </p>
+          {criteria.map((criterion) => (
+            <article className="rubric-criterion" key={String(criterion.id)}>
+              <div>
+                <span className="eyebrow">
+                  {String(criterion.classification).replace('_', ' ')}
+                </span>
+                <h3>{String(criterion.name)}</h3>
+                <p>{String(criterion.description)}</p>
+                <small>Evidence: {String(criterion.evidence_expectations)}</small>
+              </div>
+              <strong>{String(criterion.weight)}%</strong>
+            </article>
+          ))}
+          {!approved && canApprove && (
+            <form action={approveRubric.bind(null, id, String(position.rubric_id))}>
+              <button className="button primary">Approve rubric for screening</button>
+            </form>
+          )}
+          {!approved && !canApprove && (
+            <p className="simulation-label">
+              A hiring manager or administrator must approve this rubric.
+            </p>
+          )}
+        </section>
+        <aside className="surface overview-panel">
+          <span className="eyebrow">STRUCTURED JD</span>
+          <h2>{structured?.title || String(position.title) || 'Manual rubric'}</h2>
+          {structured?.seniority && <small>{structured.seniority}</small>}
+          <p>{structured?.responsibilities?.join(' · ') || 'No complete JD supplied.'}</p>
+          <div className="tag-list">
+            {structured?.skills?.map((skill) => (
+              <span className="tag" key={skill}>
+                {skill}
+              </span>
+            ))}
+          </div>
+          <small className="simulation-label">
+            {position.extraction_mode === 'succeeded'
+              ? 'Structured by Sarvam-105B'
+              : 'Simulated deterministic structuring'}{' '}
+            · requires human approval
+          </small>
+        </aside>
+      </div>
+      <section className="surface voice-note-panel">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">SAARAS VOICE NOTES</span>
+            <h2>Speak a requirement, then review it</h2>
+          </div>
+          <span className="status draft">Opt-in</span>
+        </div>
+        <p>
+          Hindi, Hinglish, and Indian English stay private. A transcript never changes the rubric
+          until a person approves it.
+        </p>
+        {canManage && <VoiceNoteRecorder positionId={id} />}
+        <div className="voice-note-list">
+          {voiceNotes.length === 0 ? (
+            <div className="empty-state">
+              <h3>No voice notes yet</h3>
+              <p>Record a short hiring requirement to create a reviewable transcript.</p>
+            </div>
+          ) : (
+            voiceNotes.map((note) => (
+              <article className="voice-note-card" key={String(note.id)}>
+                <div className="voice-note-meta">
+                  <strong>{String(note.purpose).replaceAll('_', ' ')}</strong>
+                  <span className={`stage ${String(note.status)}`}>{String(note.status)}</span>
+                  <small>
+                    {String(note.language_code)} ·{' '}
+                    {note.status === 'succeeded'
+                      ? 'Transcribed by Saaras'
+                      : 'Simulated until a real Saaras call succeeds'}
+                  </small>
+                </div>
+                {note.reviewed_at ? (
+                  <>
+                    <blockquote>{String(note.reviewed_transcript)}</blockquote>
+                    <p className="form-success">
+                      Human reviewed. Any suggested requirement was added only to a new draft rubric
+                      version.
+                    </p>
+                  </>
+                ) : canManage ? (
+                  <form action={approveVoiceTranscript} className="stack-form">
+                    <input type="hidden" name="voiceNoteId" value={String(note.id)} />
+                    <input type="hidden" name="positionId" value={id} />
+                    <label>
+                      Editable transcript
+                      <textarea
+                        name="transcript"
+                        rows={4}
+                        defaultValue={String(note.transcript ?? '')}
+                        required
+                      />
+                    </label>
+                    <small>
+                      Review language and meaning before approval. This creates an informational
+                      draft criterion and never approves it.
+                    </small>
+                    <button className="button primary">
+                      Approve transcript and add draft criterion
+                    </button>
+                  </form>
+                ) : (
+                  <blockquote>{String(note.transcript)}</blockquote>
+                )}
+                {canManage && !note.source_deleted_at && (
+                  <form action={deleteVoiceSource.bind(null, id, String(note.id))}>
+                    <button className="button ghost">Delete source audio</button>
+                  </form>
+                )}
+                {note.source_deleted_at && (
+                  <small>
+                    Source audio deleted; reviewed transcript and audit history retained.
+                  </small>
+                )}
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+    </AppShell>
+  );
 }

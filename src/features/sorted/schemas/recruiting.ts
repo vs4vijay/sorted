@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
 export const PositionStatusSchema = z.enum(['draft', 'rubric_review', 'screening', 'paused']);
-export const PipelineStageSchema = z.enum(['talent_pool', 'applied', 'under_review', 'shortlisted']);
+export const PipelineStageSchema = z.enum([
+  'talent_pool',
+  'applied',
+  'under_review',
+  'shortlisted',
+]);
 
 export const PositionSchema = z.object({
   id: z.string(),
@@ -33,4 +38,3 @@ export const CandidateSchema = z.object({
 
 export type Position = z.infer<typeof PositionSchema>;
 export type Candidate = z.infer<typeof CandidateSchema>;
-
