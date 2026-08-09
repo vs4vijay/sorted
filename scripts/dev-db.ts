@@ -15,7 +15,7 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('PGL
 
 const db = new PGlite(dataDir);
 await db.waitReady;
-await ensureSchema(db);
+await ensureSchema(db, { seed: true });
 
 const server = new PGLiteSocketServer({ db, host, port, maxConnections: 20 });
 await server.start();

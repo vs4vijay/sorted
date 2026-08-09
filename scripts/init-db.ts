@@ -2,12 +2,6 @@
 
 import { PGlite } from '@electric-sql/pglite';
 
-function generateCuid() {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).substring(2, 15);
-  return `c${timestamp}${randomStr}`;
-}
-
 export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } = {}) {
     console.log('📋 Creating tables...');
 
@@ -225,20 +219,49 @@ export async function ensureSchema(pglite: PGlite, options: { seed?: boolean } =
 
     console.log('🌱 Seeding database...');
 
-    await pglite.exec('DELETE FROM items;');
-
-    const item1Id = generateCuid();
-    const item2Id = generateCuid();
-    const item3Id = generateCuid();
-
     await pglite.exec(`
-      INSERT INTO items (id, name, description) VALUES
-        ('${item1Id}', 'Sample Item 1', 'This is a sample item to demonstrate the system'),
-        ('${item2Id}', 'Sample Item 2', 'Another sample item with a background job trigger'),
-        ('${item3Id}', 'Sample Item 3', 'Third sample item for testing');
+      INSERT INTO users (id,email,name) VALUES ('local-dev-user','developer@sorted.local','Local Developer') ON CONFLICT (id) DO NOTHING;
+      INSERT INTO organizations (id,name,slug,timezone,default_locale) VALUES ('local-dev-organization','Sorted Local Workspace','sorted-local','Asia/Kolkata','en-IN') ON CONFLICT (id) DO NOTHING;
+      INSERT INTO organization_members (id,organization_id,user_id,role) VALUES ('local-dev-membership','local-dev-organization','local-dev-user','admin') ON CONFLICT (organization_id,user_id) DO NOTHING;
+
+      INSERT INTO positions (id,organization_id,title,status,employment_type,location,workplace_preference,minimum_experience,preferred_experience,created_by_id) VALUES
+        ('seed-senior-backend-engineer','local-dev-organization','Senior Backend Engineer','screening','Full-time','Bengaluru','Hybrid',5,7,'local-dev-user'),
+        ('seed-product-designer','local-dev-organization','Product Designer','rubric_review','Full-time','Mumbai','Hybrid',3,5,'local-dev-user'),
+        ('seed-data-analyst','local-dev-organization','Data Analyst','draft','Contract','Remote · India','Remote',2,4,'local-dev-user')
+      ON CONFLICT (id) DO NOTHING;
+
+      INSERT INTO provider_executions (id,organization_id,provider,operation,model,prompt_version,schema_version,status,latency_ms) VALUES
+        ('seed-exec-backend','local-dev-organization','fixture','job_description.structure','deterministic-fixture','job-description.v1','structured-job-description.v1','simulated',0),
+        ('seed-exec-designer','local-dev-organization','fixture','job_description.structure','deterministic-fixture','job-description.v1','structured-job-description.v1','simulated',0),
+        ('seed-exec-analyst','local-dev-organization','fixture','job_description.structure','deterministic-fixture','job-description.v1','structured-job-description.v1','simulated',0)
+      ON CONFLICT (id) DO NOTHING;
+
+      INSERT INTO job_descriptions (id,organization_id,position_id,version,source_type,raw_text,structured_data,extraction_mode,provider_execution_id,created_by_id) VALUES
+        ('seed-jd-backend','local-dev-organization','seed-senior-backend-engineer',1,'pasted','Build reliable backend services for a growing Indian fintech platform.','{"title":"Senior Backend Engineer","seniority":"Senior","skills":["TypeScript","PostgreSQL","Distributed systems"],"responsibilities":["Design reliable APIs","Own data-intensive services","Mentor engineers"]}'::JSON,'simulated','seed-exec-backend','local-dev-user'),
+        ('seed-jd-designer','local-dev-organization','seed-product-designer',1,'pasted','Design accessible product workflows for recruiters and hiring panels.','{"title":"Product Designer","seniority":"Mid-senior","skills":["Product design","User research","Design systems"],"responsibilities":["Lead discovery","Prototype workflows","Maintain accessible patterns"]}'::JSON,'simulated','seed-exec-designer','local-dev-user'),
+        ('seed-jd-analyst','local-dev-organization','seed-data-analyst',1,'pasted','Turn recruiting operations data into trustworthy reporting and insights.','{"title":"Data Analyst","seniority":"Mid-level","skills":["SQL","Data visualization","Statistics"],"responsibilities":["Define metrics","Build dashboards","Audit data quality"]}'::JSON,'simulated','seed-exec-analyst','local-dev-user')
+      ON CONFLICT (organization_id,position_id,version) DO NOTHING;
+
+      INSERT INTO evaluation_rubrics (id,organization_id,position_id,version,status,approved_by_id,approved_at,created_by_id) VALUES
+        ('seed-rubric-backend','local-dev-organization','seed-senior-backend-engineer',1,'approved','local-dev-user',CURRENT_TIMESTAMP,'local-dev-user'),
+        ('seed-rubric-designer','local-dev-organization','seed-product-designer',1,'draft',NULL,NULL,'local-dev-user'),
+        ('seed-rubric-analyst','local-dev-organization','seed-data-analyst',1,'draft',NULL,NULL,'local-dev-user')
+      ON CONFLICT (organization_id,position_id,version) DO NOTHING;
+
+      INSERT INTO rubric_criteria (id,organization_id,rubric_id,name,description,criterion_type,classification,weight,evidence_expectations,display_order) VALUES
+        ('seed-criterion-backend-1','local-dev-organization','seed-rubric-backend','Backend systems','Has designed and operated production backend services.','experience','must_have',40,'Specific service ownership with scale, reliability, or latency outcomes.',0),
+        ('seed-criterion-backend-2','local-dev-organization','seed-rubric-backend','PostgreSQL','Can model, query, and tune relational data.','skill','must_have',30,'Schema design, query tuning, migrations, or production troubleshooting.',1),
+        ('seed-criterion-backend-3','local-dev-organization','seed-rubric-backend','Technical leadership','Raises engineering quality through reviews and mentoring.','experience','preferred',30,'Examples of mentoring, design reviews, or cross-team technical ownership.',2),
+        ('seed-criterion-designer-1','local-dev-organization','seed-rubric-designer','Product discovery','Turns user needs into clear product direction.','experience','must_have',40,'Research artifacts and decisions tied to user evidence.',0),
+        ('seed-criterion-designer-2','local-dev-organization','seed-rubric-designer','Interaction design','Creates usable end-to-end workflows.','skill','must_have',35,'Portfolio evidence showing flows, prototypes, and iteration.',1),
+        ('seed-criterion-designer-3','local-dev-organization','seed-rubric-designer','Design systems','Contributes reusable accessible patterns.','skill','preferred',25,'Documented components, governance, or accessibility work.',2),
+        ('seed-criterion-analyst-1','local-dev-organization','seed-rubric-analyst','SQL analysis','Produces correct analysis from relational data.','skill','must_have',45,'Queries, data modeling, and validation examples.',0),
+        ('seed-criterion-analyst-2','local-dev-organization','seed-rubric-analyst','Decision-ready reporting','Communicates metrics and tradeoffs clearly.','skill','must_have',30,'Dashboards or reports connected to business decisions.',1),
+        ('seed-criterion-analyst-3','local-dev-organization','seed-rubric-analyst','Data quality','Finds and resolves unreliable data.','experience','preferred',25,'Concrete audits, monitoring, or reconciliation work.',2)
+      ON CONFLICT (id) DO NOTHING;
     `);
 
-    console.log('✅ Created 3 sample items');
+    console.log('✅ Seeded 3 persisted recruiting positions and balanced rubrics');
     console.log('🎉 Database initialization complete!');
     console.log('');
     console.log('Next steps:');
