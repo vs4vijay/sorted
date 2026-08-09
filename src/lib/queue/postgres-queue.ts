@@ -58,7 +58,7 @@ export class PostgresQueue implements IQueue {
       `INSERT INTO jobs (
         id, task_identifier, payload, status, priority, run_at,
         max_attempts, key, queue
-      ) VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, $8)
+      ) VALUES ($1, $2, $3::jsonb, 'pending', $4, $5::timestamp, $6, $7, $8)
       RETURNING *`,
       [
         id,
@@ -74,8 +74,10 @@ export class PostgresQueue implements IQueue {
 
     const job = rowToJob(result[0]);
 
+    // Prisma cannot deserialize pg_notify's void return, so wrap it to
+    // project a single integer column.
     await executeQuery(
-      `SELECT pg_notify($1, $2)`,
+      `SELECT 1 FROM (SELECT pg_notify($1, $2)) AS notify_result`,
       [CHANNEL_NAME, JSON.stringify({ jobId: job.id })]
     );
 
