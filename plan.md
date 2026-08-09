@@ -224,7 +224,6 @@ Last updated: 2026-08-09 (Slices 8–10 complete for hackathon scope; Slice 11 p
 - Slice 5 follow-up breadth, if prioritized after the primary demo loop, is named/saved compound candidate views, bulk match orchestration, side-by-side comparison, and audited manual score overrides. The current candidate table supports the required no-JD talent-pool mode and a selected-position ranked mode.
 - The local PGlite path processes persisted jobs inline after enqueueing because separate PGlite processes cannot safely share the same local store; PostgreSQL preview/production continues through the registered `extract-cv-document` worker task.
 - Do not mark Slice 0 fully complete until preview deployment, production PostgreSQL, and backup behavior have been verified in the target hosting environment.
-- Deploy the Render blueprint (New > Blueprint in the Render dashboard, select this repo), then verify health/readiness on the live URL and confirm the free-tier PostgreSQL backup settings. Free Postgres expires after 30 days; switch to `basic-256mb` before then to keep the environment.
 
 ## Slice 0 — Reframe the prototype and establish delivery foundations
 
