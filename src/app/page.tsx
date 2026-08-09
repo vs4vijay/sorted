@@ -4,16 +4,17 @@ import { Icon } from '@/components/recruiting/icons';
 import { recruitingService } from '@/features/sorted/services/recruiting-service';
 import { getCurrentAccess } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
+import { SequenceRepository } from '@/features/outreach/repositories/sequence-repository';
 
 export default async function DashboardPage() {
   const access = await getCurrentAccess();
   if (!access) redirect('/sign-in');
-  const [positions, candidates] = await Promise.all([recruitingService.listPositions(), recruitingService.listCandidates()]);
+  const [positions, candidates, metrics] = await Promise.all([recruitingService.listPositions(), recruitingService.listCandidates(), new SequenceRepository().dashboard(access.organization.id)]);
   const reviewed = candidates.filter((candidate) => candidate.stage === 'under_review');
   return <AppShell active="dashboard">
     <PageHeader eyebrow="SUNDAY, 9 AUGUST" title="Good morning, Ananya" description="Here’s what your hiring team needs to move forward today." action={<Link className="button secondary" href="/positions/new"><Icon name="plus" size={16}/> Create position</Link>}/>
     <section className="stats-grid" aria-label="Hiring overview">
-      {[['Active positions', '3', '+1 this month'], ['Candidates', '18', '6 added this week'], ['Awaiting review', '5', '2 overdue'], ['Shortlisted', '4', 'Across 2 positions']].map(([label, value, note], index) => <div className="stat-card" key={label}><span>{label}</span><strong>{value}</strong><small className={index === 2 ? 'warning' : ''}>{note}</small></div>)}
+      {[['Awaiting review', String(metrics.awaiting_review??0), 'Panel action required'], ['Decisions pending', String(metrics.decisions_pending??0), 'Ready for outreach'], ['Outreach due today', String(metrics.outreach_due??0), 'India business hours'], ['Candidate replies', String(metrics.candidate_replies??0), 'Ready for human follow-up']].map(([label, value, note], index) => <div className="stat-card" key={label}><span>{label}</span><strong>{value}</strong><small className={index === 0 ? 'warning' : ''}>{note}</small></div>)}
     </section>
     <div className="dashboard-grid">
       <section><div className="section-heading"><div><span className="eyebrow">PRIORITY QUEUE</span><h2>Needs your attention</h2></div><Link href="/candidates">View all <Icon name="arrow" size={14}/></Link></div>
