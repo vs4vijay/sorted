@@ -47,6 +47,7 @@ export const UpdateMemberRoleInputSchema = z.object({
 });
 
 export const RevokeInvitationInputSchema = z.object({ invitationId: z.string().uuid() });
+export const UpdateRetentionPolicyInputSchema = z.object({ retentionDays: z.coerce.number().int().min(30).max(3650) });
 
 export const AcceptInvitationInputSchema = z.object({
   token: z.string().min(32).max(256),

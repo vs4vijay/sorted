@@ -131,6 +131,28 @@ describe('OrganizationAccessRepository PGlite integration', () => {
     expect(user.rows[0]?.email).toBe('asha@acme.test');
   });
 
+  test('provisions one stable local bypass identity idempotently', async () => {
+    db = new PGlite();
+    await db.waitReady;
+    await createAccessSchema(db);
+    const repository = repositoryFor(db);
+
+    const first = await repository.ensureLocalDevelopmentAccess();
+    const second = await repository.ensureLocalDevelopmentAccess();
+
+    expect(first).toEqual(second);
+    expect(first.sessionId).toBe('local-auth-bypass');
+    expect(first.membership.role).toBe('admin');
+    expect(first.organization.slug).toBe('sorted-local');
+    const counts = await db.query<{ users: number; organizations: number; memberships: number }>(`
+      SELECT
+        (SELECT COUNT(*)::int FROM users) AS users,
+        (SELECT COUNT(*)::int FROM organizations) AS organizations,
+        (SELECT COUNT(*)::int FROM organization_members) AS memberships
+    `);
+    expect(counts.rows[0]).toEqual({ users: 1, organizations: 1, memberships: 1 });
+  });
+
   test('rolls back earlier inserts when the session insert fails', async () => {
     db = new PGlite();
     await db.waitReady;

@@ -91,6 +91,74 @@ export class OrganizationAccessRepository {
     });
   }
 
+  /**
+   * Creates and resolves the stable synthetic identity used by the explicitly
+   * enabled local-development auth bypass. Keep this behind the server-side
+   * environment guard in `src/lib/auth/session.ts`.
+   */
+  async ensureLocalDevelopmentAccess(): Promise<ResolvedOrganizationAccess> {
+    const rows = await this.query(
+      `WITH ensured_user AS (
+        INSERT INTO users (id, email, name)
+        VALUES ('local-dev-user', 'developer@sorted.local', 'Local Developer')
+        ON CONFLICT (id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+        RETURNING id, email, name
+      ), ensured_organization AS (
+        INSERT INTO organizations (id, name, slug, timezone, default_locale)
+        VALUES ('local-dev-organization', 'Sorted Local Workspace', 'sorted-local', 'Asia/Kolkata', 'en-IN')
+        ON CONFLICT (id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+        RETURNING id, name, slug, status, timezone, default_locale, retention_days
+      ), ensured_membership AS (
+        INSERT INTO organization_members (id, organization_id, user_id, role)
+        SELECT 'local-dev-membership', ensured_organization.id, ensured_user.id, 'admin'
+        FROM ensured_user CROSS JOIN ensured_organization
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'admin', updated_at = CURRENT_TIMESTAMP
+        RETURNING id, organization_id, user_id, role
+      )
+      SELECT
+        'local-auth-bypass' AS session_id,
+        ensured_user.id AS user_id,
+        ensured_user.email AS user_email,
+        ensured_user.name AS user_name,
+        ensured_organization.id AS organization_id,
+        ensured_organization.name AS organization_name,
+        ensured_organization.slug AS organization_slug,
+        ensured_organization.status AS organization_status,
+        ensured_organization.timezone,
+        ensured_organization.default_locale,
+        ensured_organization.retention_days,
+        ensured_membership.id AS membership_id,
+        ensured_membership.role AS membership_role
+      FROM ensured_membership
+      CROSS JOIN ensured_user
+      CROSS JOIN ensured_organization`,
+    ) as AccessRow[];
+
+    const row = rows[0];
+    if (!row) throw new Error('Could not provision the local development identity.');
+    return ResolvedOrganizationAccessSchema.parse({
+      sessionId: row.session_id,
+      userId: row.user_id,
+      userEmail: row.user_email,
+      userName: row.user_name,
+      organization: {
+        id: row.organization_id,
+        name: row.organization_name,
+        slug: row.organization_slug,
+        status: row.organization_status,
+        timezone: row.timezone,
+        defaultLocale: row.default_locale,
+        retentionDays: row.retention_days,
+      },
+      membership: {
+        id: row.membership_id,
+        organizationId: row.organization_id,
+        userId: row.user_id,
+        role: row.membership_role,
+      },
+    });
+  }
+
   async findSetupConflicts(email: string, organizationSlug: string): Promise<{ emailTaken: boolean; slugTaken: boolean }> {
     const rows = await this.query(
       `SELECT

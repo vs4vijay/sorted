@@ -50,9 +50,12 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
     });
   } catch (error) {
     logError('organization.setup_failed', error);
+    const databaseMessage = error instanceof Error && /relation .* does not exist|database|pglite|mutex|connection/i.test(error.message)
+      ? 'The recruiting workspace database is not ready. Restart the local app so setup can initialize it, then try again.'
+      : undefined;
     return (
       mapUniqueViolationToSetupState(error) ?? {
-        message: 'We could not create the workspace. Try again in a moment.',
+        message: databaseMessage ?? 'We could not create the workspace. Try again in a moment.',
       }
     );
   }

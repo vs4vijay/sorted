@@ -11,8 +11,10 @@ export default async function DashboardPage() {
   if (!access) redirect('/sign-in');
   const [positions, candidates, metrics] = await Promise.all([recruitingService.listPositions(), recruitingService.listCandidates(), new SequenceRepository().dashboard(access.organization.id)]);
   const reviewed = candidates.filter((candidate) => candidate.stage === 'under_review');
+  const today = new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: access.organization.timezone }).format(new Date()).toUpperCase();
+  const firstName = access.userName.trim().split(/\s+/)[0];
   return <AppShell active="dashboard">
-    <PageHeader eyebrow="SUNDAY, 9 AUGUST" title="Good morning, Ananya" description="Here’s what your hiring team needs to move forward today." action={<Link className="button secondary" href="/positions/new"><Icon name="plus" size={16}/> Create position</Link>}/>
+    <PageHeader eyebrow={today} title={`Good morning, ${firstName}`} description="Here’s what your hiring team needs to move forward today." action={<Link className="button secondary" href="/positions/new"><Icon name="plus" size={16}/> Create position</Link>}/>
     <section className="stats-grid" aria-label="Hiring overview">
       {[['Awaiting review', String(metrics.awaiting_review??0), 'Panel action required'], ['Decisions pending', String(metrics.decisions_pending??0), 'Ready for outreach'], ['Outreach due today', String(metrics.outreach_due??0), 'India business hours'], ['Candidate replies', String(metrics.candidate_replies??0), 'Ready for human follow-up']].map(([label, value, note], index) => <div className="stat-card" key={label}><span>{label}</span><strong>{value}</strong><small className={index === 0 ? 'warning' : ''}>{note}</small></div>)}
     </section>
