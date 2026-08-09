@@ -1,0 +1,23 @@
+Sorted. Evidence-first recruiting for Indian hiring teams.
+
+Create your recruiting workspace. You become the organization administrator, and candidate data stays private to approved members.
+
+The dashboard shows what the hiring team needs today — overdue reviews, rubrics ready for approval, and candidate replies.
+
+Positions move from draft, through rubric review, into screening, with panel members and progress on every role.
+
+Invite technical reviewers to the hiring panel. Invitations expire in seven days.
+
+Accepted reviewers work under scoped permissions. Only administrators can invite members or change roles.
+
+Approve an immutable evaluation rubric before screening. Criteria require evidence. Protected attributes stay out of matching.
+
+Import CVs into organization-scoped candidate profiles. Batches parse into auditable sources.
+
+Every extracted claim keeps its source and extraction version. Humans confirm, correct, or reject.
+
+Match candidates with separate role-fit and evidence-confidence values. AI recommends. It never decides.
+
+The panel records an independent shortlist. Sorted stops at the interview boundary.
+
+AI recommends. Humans decide.

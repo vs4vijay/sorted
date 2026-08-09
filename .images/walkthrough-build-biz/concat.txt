@@ -1,0 +1,8 @@
+file '/Users/spoorthygurajala/Downloads/sorted/.images/walkthrough-build-biz/clips/00.mp4'
+file '/Users/spoorthygurajala/Downloads/sorted/.images/walkthrough-build-biz/clips/01.mp4'
+file '/Users/spoorthygurajala/Downloads/sorted/.images/walkthrough-build-biz/clips/02.mp4'
+file '/Users/spoorthygurajala/Downloads/sorted/.images/walkthrough-build-biz/clips/03.mp4'
+file '/Users/spoorthygurajala/Downloads/sorted/.images/walkthrough-build-biz/clips/04.mp4'
+file '/Users/spoorthygurajala/Downloads/sorted/.images/walkthrough-build-biz/clips/05.mp4'
+file '/Users/spoorthygurajala/Downloads/sorted/.images/walkthrough-build-biz/clips/06.mp4'
+file '/Users/spoorthygurajala/Downloads/sorted/.images/walkthrough-build-biz/clips/07.mp4'

@@ -1,0 +1,11 @@
+{
+  "name": "sorted-ppt-images",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun ./build-ppt.mjs"
+  },
+  "devDependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
+}
