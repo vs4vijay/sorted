@@ -37,6 +37,8 @@ bun run db:seed
 
 This project intentionally uses Bun only; pnpm/npm/yarn commands are not supported.
 
+Demo login: `demo@sorted.local` / `demo`.
+
 ## Verify Installation
 
 1. **Homepage**: http://localhost:3000
