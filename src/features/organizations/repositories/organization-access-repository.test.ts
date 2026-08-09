@@ -8,12 +8,23 @@ describe('OrganizationAccessRepository', () => {
     const repository = new OrganizationAccessRepository(async (sql, params) => {
       capturedSql = sql;
       capturedParams = params ?? [];
-      return [{
-        session_id: 'session-1', user_id: 'user-1', user_email: 'admin@acme.test', user_name: 'Asha Admin',
-        organization_id: 'org-1', organization_name: 'Acme India', organization_slug: 'acme-india',
-        organization_status: 'active', timezone: 'Asia/Kolkata', default_locale: 'en-IN', retention_days: 730,
-        membership_id: 'member-1', membership_role: 'admin',
-      }];
+      return [
+        {
+          session_id: 'session-1',
+          user_id: 'user-1',
+          user_email: 'admin@acme.test',
+          user_name: 'Asha Admin',
+          organization_id: 'org-1',
+          organization_name: 'Acme India',
+          organization_slug: 'acme-india',
+          organization_status: 'active',
+          timezone: 'Asia/Kolkata',
+          default_locale: 'en-IN',
+          retention_days: 730,
+          membership_id: 'member-1',
+          membership_role: 'admin',
+        },
+      ];
     });
 
     const access = await repository.findActiveAccessBySessionHash('hashed-token', 'acme-india');
@@ -37,7 +48,16 @@ describe('OrganizationAccessRepository', () => {
     const repository = new OrganizationAccessRepository(async (sql, params) => {
       capturedSql = sql;
       capturedParams = params ?? [];
-      return [{ id: 'member-1', name: 'Asha Admin', email: 'asha@acme.test', role: 'admin', joined_at: new Date('2026-08-09'), is_current_user: true }];
+      return [
+        {
+          id: 'member-1',
+          name: 'Asha Admin',
+          email: 'asha@acme.test',
+          role: 'admin',
+          joined_at: new Date('2026-08-09'),
+          is_current_user: true,
+        },
+      ];
     });
     const members = await repository.listMembers('org-1', 'user-1');
     expect(capturedSql).toContain('organization_members.organization_id = $1');
@@ -53,7 +73,18 @@ describe('OrganizationAccessRepository', () => {
       capturedParams = params ?? [];
       return [{ created: true }];
     });
-    expect(await repository.createInvitation({ id: 'invite-1', organizationId: 'org-1', email: 'reviewer@acme.test', role: 'technical_reviewer', tokenHash: 'hash', invitedById: 'user-1', expiresAt: new Date('2026-08-16'), auditEventId: 'audit-1' })).toBe(true);
+    expect(
+      await repository.createInvitation({
+        id: 'invite-1',
+        organizationId: 'org-1',
+        email: 'reviewer@acme.test',
+        role: 'technical_reviewer',
+        tokenHash: 'hash',
+        invitedById: 'user-1',
+        expiresAt: new Date('2026-08-16'),
+        auditEventId: 'audit-1',
+      }),
+    ).toBe(true);
     expect(capturedSql).toContain('invitation.created');
     expect(capturedSql).toContain('INSERT INTO audit_events');
     expect(capturedParams[1]).toBe('org-1');
@@ -67,7 +98,15 @@ describe('OrganizationAccessRepository', () => {
       capturedParams = params ?? [];
       return [{ changed: true }];
     });
-    expect(await repository.updateMemberRole({ organizationId: 'org-1', membershipId: 'member-2', actorUserId: 'user-1', role: 'hiring_manager', auditEventId: 'audit-1' })).toBe(true);
+    expect(
+      await repository.updateMemberRole({
+        organizationId: 'org-1',
+        membershipId: 'member-2',
+        actorUserId: 'user-1',
+        role: 'hiring_manager',
+        auditEventId: 'audit-1',
+      }),
+    ).toBe(true);
     expect(capturedSql).toContain('id = $1 AND organization_id = $2');
     expect(capturedParams.slice(0, 2)).toEqual(['member-2', 'org-1']);
   });
@@ -76,9 +115,18 @@ describe('OrganizationAccessRepository', () => {
     let capturedSql = '';
     let capturedParams: unknown[] = [];
     const repository = new OrganizationAccessRepository(async (sql, params) => {
-      capturedSql = sql; capturedParams = params ?? []; return [{ revoked: true }];
+      capturedSql = sql;
+      capturedParams = params ?? [];
+      return [{ revoked: true }];
     });
-    expect(await repository.revokeInvitation({ invitationId: 'invite-1', organizationId: 'org-1', actorUserId: 'user-1', auditEventId: 'audit-1' })).toBe(true);
+    expect(
+      await repository.revokeInvitation({
+        invitationId: 'invite-1',
+        organizationId: 'org-1',
+        actorUserId: 'user-1',
+        auditEventId: 'audit-1',
+      }),
+    ).toBe(true);
     expect(capturedSql).toContain("organization_id = $2 AND status = 'pending'");
     expect(capturedSql).toContain('invitation.revoked');
     expect(capturedParams.slice(0, 3)).toEqual(['invite-1', 'org-1', 'user-1']);
@@ -88,11 +136,21 @@ describe('OrganizationAccessRepository', () => {
     let capturedSql = '';
     let capturedParams: unknown[] = [];
     const repository = new OrganizationAccessRepository(async (sql, params) => {
-      capturedSql = sql; capturedParams = params ?? []; return [{ organization_slug: 'acme-india' }];
+      capturedSql = sql;
+      capturedParams = params ?? [];
+      return [{ organization_slug: 'acme-india' }];
     });
-    const accepted = await repository.acceptInvitation({ tokenHash: 'token-hash', name: 'Ravi Reviewer', passwordHash: 'argon-hash', userId: 'user-2',
-      membershipId: 'member-2', sessionId: 'session-2', sessionTokenHash: 'session-hash',
-      sessionExpiresAt: new Date('2026-08-23'), auditEventId: 'audit-2' });
+    const accepted = await repository.acceptInvitation({
+      tokenHash: 'token-hash',
+      name: 'Ravi Reviewer',
+      passwordHash: 'argon-hash',
+      userId: 'user-2',
+      membershipId: 'member-2',
+      sessionId: 'session-2',
+      sessionTokenHash: 'session-hash',
+      sessionExpiresAt: new Date('2026-08-23'),
+      auditEventId: 'audit-2',
+    });
     expect(accepted).toEqual({ organizationSlug: 'acme-india' });
     expect(capturedSql).toContain('invitations.token_hash = $1');
     expect(capturedSql).toContain('invitation.accepted');

@@ -66,7 +66,11 @@ function repositoryFor(db: PGlite) {
   });
 }
 
-function baseInput(overrides: Partial<Parameters<OrganizationAccessRepository['createFirstOrganizationWithSession']>[0]> = {}) {
+function baseInput(
+  overrides: Partial<
+    Parameters<OrganizationAccessRepository['createFirstOrganizationWithSession']>[0]
+  > = {},
+) {
   return {
     userId: randomUUID(),
     name: 'Asha Admin',

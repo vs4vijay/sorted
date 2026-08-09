@@ -1,2 +1,4 @@
 import { notFound } from 'next/navigation';
-export default function JobsPage() { notFound(); }
+export default function JobsPage() {
+  notFound();
+}

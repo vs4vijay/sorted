@@ -1,1 +1,33 @@
-export function AuthShell({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: React.ReactNode }) { return <main className="setup-page"><section className="setup-brand"><div className="setup-logo">S</div><span>sorted</span><p>Evidence-first hiring, with people in control.</p><div className="setup-promise"><strong>Private by default</strong><span>Organization-scoped access protects candidate evidence and hiring decisions.</span></div></section><section className="setup-panel"><div className="setup-card"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p>{children}</div></section></main>; }
+export function AuthShell({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <main className="setup-page">
+      <section className="setup-brand">
+        <div className="setup-logo">S</div>
+        <span>sorted</span>
+        <p>Evidence-first hiring, with people in control.</p>
+        <div className="setup-promise">
+          <strong>Private by default</strong>
+          <span>Organization-scoped access protects candidate evidence and hiring decisions.</span>
+        </div>
+      </section>
+      <section className="setup-panel">
+        <div className="setup-card">
+          <span className="eyebrow">{eyebrow}</span>
+          <h1>{title}</h1>
+          <p>{description}</p>
+          {children}
+        </div>
+      </section>
+    </main>
+  );
+}

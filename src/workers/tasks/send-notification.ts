@@ -1,4 +1,4 @@
-import { JobPayload, Job } from '@/lib/queue/types';
+import { JobPayload } from '@/lib/queue/types';
 
 interface NotificationPayload extends JobPayload {
   type: 'email' | 'sms' | 'push' | 'webhook';
@@ -7,7 +7,7 @@ interface NotificationPayload extends JobPayload {
   metadata?: Record<string, unknown>;
 }
 
-export default async function sendNotification(payload: JobPayload, _job: Job): Promise<void> {
+export default async function sendNotification(payload: JobPayload): Promise<void> {
   const { type, recipient, message, metadata } = payload as NotificationPayload;
 
   console.log(`Sending ${type} notification to: ${recipient}`);

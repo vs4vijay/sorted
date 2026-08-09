@@ -3,6 +3,63 @@ import { useActionState, useState } from 'react';
 import { importCandidates, type ImportState } from './actions';
 
 export function CandidateImportForm({ positions }: { positions: { id: string; title: string }[] }) {
-  const [state, action, pending] = useActionState(importCandidates, {} as ImportState); const [count, setCount] = useState(0);
-  return <form action={action} className="surface import-card"><div className="import-heading"><div><span className="eyebrow">PRIVATE BATCH IMPORT</span><h2>Drop CVs into the talent pool</h2><p>PDF and DOCX · up to 20 files · 10 MB each · private and scanned before extraction</p></div><label className="position-select">Assign to position <select name="positionId" defaultValue=""><option value="">Talent pool only</option>{positions.map((position) => <option key={position.id} value={position.id}>{position.title}</option>)}</select></label></div><label className="drop-zone"><input name="files" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple required onChange={(event) => setCount(event.target.files?.length ?? 0)}/><strong>{count ? `${count} CV${count === 1 ? '' : 's'} selected` : 'Choose or drop CVs here'}</strong><span>Structure and content type are verified; files stay private until a security scan clears them.</span></label>{state.error && <p className="form-error" role="alert">{state.error}</p>}{state.message && <p className="form-success" role="status">{state.message}</p>}{state.skipped?.map((item) => <p className="import-warning" key={item}>{item}</p>)}<button className="button primary" disabled={pending}>{pending ? 'Securing files…' : 'Start private import'}</button></form>;
+  const [state, action, pending] = useActionState(importCandidates, {} as ImportState);
+  const [count, setCount] = useState(0);
+  return (
+    <form action={action} className="surface import-card">
+      <div className="import-heading">
+        <div>
+          <span className="eyebrow">PRIVATE BATCH IMPORT</span>
+          <h2>Drop CVs into the talent pool</h2>
+          <p>PDF and DOCX · up to 20 files · 10 MB each · private and scanned before extraction</p>
+        </div>
+        <label className="position-select">
+          Assign to position{' '}
+          <select name="positionId" defaultValue="">
+            <option value="">Talent pool only</option>
+            {positions.map((position) => (
+              <option key={position.id} value={position.id}>
+                {position.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label className="drop-zone">
+        <input
+          name="files"
+          type="file"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          multiple
+          required
+          onChange={(event) => setCount(event.target.files?.length ?? 0)}
+        />
+        <strong>
+          {count ? `${count} CV${count === 1 ? '' : 's'} selected` : 'Choose or drop CVs here'}
+        </strong>
+        <span>
+          Structure and content type are verified; files stay private until a security scan clears
+          them.
+        </span>
+      </label>
+      {state.error && (
+        <p className="form-error" role="alert">
+          {state.error}
+        </p>
+      )}
+      {state.message && (
+        <p className="form-success" role="status">
+          {state.message}
+        </p>
+      )}
+      {state.skipped?.map((item) => (
+        <p className="import-warning" key={item}>
+          {item}
+        </p>
+      ))}
+      <button className="button primary" disabled={pending}>
+        {pending ? 'Securing files…' : 'Start private import'}
+      </button>
+    </form>
+  );
 }

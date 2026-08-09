@@ -79,18 +79,14 @@ export function JobsTable({ jobs }: JobsTableProps) {
               {jobs.map((job) => (
                 <tr key={job.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {job.taskIdentifier}
-                    </div>
+                    <div className="text-sm font-medium text-gray-900">{job.taskIdentifier}</div>
                     {job.lastError && (
                       <div className="text-xs text-red-500 mt-1 truncate max-w-xs">
                         {job.lastError}
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(job.status)}
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(job.status)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {job.attempts} / {job.maxAttempts}
                   </td>
@@ -102,9 +98,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     <details className="cursor-pointer">
-                      <summary className="text-blue-600 hover:text-blue-800">
-                        View
-                      </summary>
+                      <summary className="text-blue-600 hover:text-blue-800">View</summary>
                       <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
                         {JSON.stringify(job.payload, null, 2)}
                       </pre>

@@ -11,7 +11,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const url = new URL(request.url);
   const expires = Number(url.searchParams.get('expires'));
   const signature = url.searchParams.get('signature') ?? '';
-  if (!privateCandidateAudioStorage.verify(String(asset.storage_key), expires, signature)) return new Response('Link expired', { status: 403 });
+  if (!privateCandidateAudioStorage.verify(String(asset.storage_key), expires, signature))
+    return new Response('Link expired', { status: 403 });
   const bytes = await privateCandidateAudioStorage.get(String(asset.storage_key));
-  return new Response(bytes, { headers: { 'content-type': String(asset.media_type ?? 'audio/wav'), 'content-disposition': 'inline; filename="candidate-audio-preview.wav"', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } });
+  return new Response(bytes, {
+    headers: {
+      'content-type': String(asset.media_type ?? 'audio/wav'),
+      'content-disposition': 'inline; filename="candidate-audio-preview.wav"',
+      'cache-control': 'private, no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  });
 }

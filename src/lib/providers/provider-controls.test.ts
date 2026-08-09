@@ -3,8 +3,18 @@ import { providerEnabled } from './provider-controls';
 
 const original = { ...process.env };
 afterEach(() => {
-  for (const key of ['SARVAM_API_KEY','SARVAM_ENABLED','EMAIL_PROVIDER_API_KEY','RESEND_API','EMAIL_FROM_ADDRESS','EMAIL_DELIVERY_ENABLED','MALWARE_SCANNER_URL','MALWARE_SCANNER_ENABLED']) {
-    if (original[key] === undefined) delete process.env[key]; else process.env[key] = original[key];
+  for (const key of [
+    'SARVAM_API_KEY',
+    'SARVAM_ENABLED',
+    'EMAIL_PROVIDER_API_KEY',
+    'RESEND_API',
+    'EMAIL_FROM_ADDRESS',
+    'EMAIL_DELIVERY_ENABLED',
+    'MALWARE_SCANNER_URL',
+    'MALWARE_SCANNER_ENABLED',
+  ]) {
+    if (original[key] === undefined) delete process.env[key];
+    else process.env[key] = original[key];
   }
 });
 

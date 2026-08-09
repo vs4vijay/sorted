@@ -17,10 +17,15 @@ export class RateLimitError extends Error {
   }
 }
 
-export async function enforceRateLimit(organizationId: string, actorId: string, action: RateLimitedAction) {
+export async function enforceRateLimit(
+  organizationId: string,
+  actorId: string,
+  action: RateLimitedAction,
+) {
   const policy = RATE_LIMITS[action];
   const cutoff = new Date(Date.now() - policy.windowSeconds * 1000);
-  const rows = await executeQuery<{ accepted: boolean }>(`
+  const rows = await executeQuery<{ accepted: boolean }>(
+    `
     WITH recent AS (
       SELECT COUNT(*)::INTEGER AS count FROM rate_limit_events
       WHERE organization_id = $1 AND actor_id = $2 AND action = $3 AND created_at >= $4
@@ -29,6 +34,8 @@ export async function enforceRateLimit(organizationId: string, actorId: string, 
       SELECT $5, $1, $2, $3 FROM recent WHERE count < $6 RETURNING id
     )
     SELECT EXISTS(SELECT 1 FROM inserted) AS accepted
-  `, [organizationId, actorId, action, cutoff, crypto.randomUUID(), policy.limit]);
+  `,
+    [organizationId, actorId, action, cutoff, crypto.randomUUID(), policy.limit],
+  );
   if (!rows[0]?.accepted) throw new RateLimitError(action);
 }

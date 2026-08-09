@@ -15,7 +15,10 @@ function getPool() {
 }
 
 /** Execute parameterized SQL through PostgreSQL wire protocol. */
-export async function executeQuery<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
+export async function executeQuery<T = Record<string, unknown>>(
+  sql: string,
+  params: unknown[] = [],
+): Promise<T[]> {
   const result = await getPool().query(sql, params);
   return result.rows as T[];
 }

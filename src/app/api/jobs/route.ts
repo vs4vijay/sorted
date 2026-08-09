@@ -35,10 +35,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Failed to fetch jobs:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch jobs' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch jobs' }, { status: 500 });
   }
 }
 
@@ -51,32 +48,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = enqueueJobSchema.parse(body);
 
-    await enqueueJob(
-      data.taskName,
-      data.payload,
-      {
-        runAt: data.runAt ? new Date(data.runAt) : undefined,
-        maxAttempts: data.maxAttempts,
-        priority: data.priority,
-      }
-    );
+    await enqueueJob(data.taskName, data.payload, {
+      runAt: data.runAt ? new Date(data.runAt) : undefined,
+      maxAttempts: data.maxAttempts,
+      priority: data.priority,
+    });
 
     return NextResponse.json(
       { success: true, message: 'Job enqueued successfully' },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Validation failed', details: error.issues },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     console.error('Failed to enqueue job:', error);
-    return NextResponse.json(
-      { error: 'Failed to enqueue job' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to enqueue job' }, { status: 500 });
   }
 }

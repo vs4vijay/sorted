@@ -63,13 +63,8 @@ describe('users email lower unique migration', () => {
     expect(indexes).toContain('users_email_lower_key');
     expect(indexes).not.toContain('users_email_key');
 
-    const emails = await db.query<{ email: string }>(
-      'SELECT email FROM users ORDER BY id',
-    );
-    expect(emails.rows.map((row) => row.email)).toEqual([
-      'user@company.com',
-      'other@company.com',
-    ]);
+    const emails = await db.query<{ email: string }>('SELECT email FROM users ORDER BY id');
+    expect(emails.rows.map((row) => row.email)).toEqual(['user@company.com', 'other@company.com']);
 
     await expect(
       db.exec(`INSERT INTO users (id, email, name) VALUES ('user-3', 'USER@company.com', 'Dup')`),
@@ -96,12 +91,7 @@ describe('users email lower unique migration', () => {
     expect(indexes).toContain('users_email_key');
     expect(indexes).not.toContain('users_email_lower_key');
 
-    const emails = await db.query<{ email: string }>(
-      'SELECT email FROM users ORDER BY id',
-    );
-    expect(emails.rows.map((row) => row.email)).toEqual([
-      'User@Company.com',
-      'user@company.com',
-    ]);
+    const emails = await db.query<{ email: string }>('SELECT email FROM users ORDER BY id');
+    expect(emails.rows.map((row) => row.email)).toEqual(['User@Company.com', 'user@company.com']);
   });
 });

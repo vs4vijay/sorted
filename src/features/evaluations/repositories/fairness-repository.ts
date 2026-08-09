@@ -1,22 +1,131 @@
-import { executeQuery } from "@/lib/db";
-import { RecommendationReconstructionSchema, type RecommendationReconstruction } from "../schemas/fairness";
-type Query=(sql:string,params?:unknown[])=>Promise<unknown[]>; type Row=Record<string,unknown>;
-const strings=(value:unknown)=>Array.isArray(value)?value.filter((item):item is string=>typeof item==="string"):[];
-export class FairnessRepository{
-  constructor(private query:Query=executeQuery){}
-  async listEvaluations(organizationId:string):Promise<Row[]>{return this.query(`SELECT ce.id,ce.created_at,ce.role_fit,ce.evidence_confidence,ce.recommendation,ce.state,ce.rubric_version,c.display_name AS candidate_name,p.title AS position_title,pe.provider,pe.model,pe.status AS provider_status FROM candidate_evaluations ce JOIN candidates c ON c.id=ce.candidate_id AND c.organization_id=ce.organization_id JOIN positions p ON p.id=ce.position_id AND p.organization_id=ce.organization_id LEFT JOIN provider_executions pe ON pe.id=ce.provider_execution_id AND pe.organization_id=ce.organization_id WHERE ce.organization_id=$1 ORDER BY ce.created_at DESC`,[organizationId]) as Promise<Row[]>}
-  async reconstruct(organizationId:string,evaluationId:string):Promise<RecommendationReconstruction|null>{
-    const evaluations=await this.query(`SELECT ce.*,c.display_name AS candidate_name,p.title AS position_title,pe.provider,pe.model,pe.prompt_version,pe.schema_version,pe.provider_request_id,pe.latency_ms,pe.status AS provider_status FROM candidate_evaluations ce JOIN candidates c ON c.id=ce.candidate_id AND c.organization_id=ce.organization_id JOIN positions p ON p.id=ce.position_id AND p.organization_id=ce.organization_id LEFT JOIN provider_executions pe ON pe.id=ce.provider_execution_id AND pe.organization_id=ce.organization_id WHERE ce.organization_id=$1 AND ce.id=$2`,[organizationId,evaluationId]) as Row[];const evaluation=evaluations[0];if(!evaluation)return null;
-    const [criteria,reviews,decisions,audits]=await Promise.all([
-      this.query(`SELECT rc.id,rc.name,rc.classification,rc.weight,cr.rating,cr.score,cr.evidence_confidence,cr.reasoning,cr.evidence_claim_ids,cr.gaps FROM criterion_evaluations cr JOIN rubric_criteria rc ON rc.id=cr.criterion_id AND rc.organization_id=cr.organization_id WHERE cr.organization_id=$1 AND cr.candidate_evaluation_id=$2 ORDER BY rc.display_order`,[organizationId,evaluationId]),
-      this.query(`SELECT pr.recommendation,pr.summary,pr.submitted_at,u.name AS actor FROM panel_reviews pr JOIN organization_members om ON om.id=pr.reviewer_member_id AND om.organization_id=pr.organization_id JOIN users u ON u.id=om.user_id WHERE pr.organization_id=$1 AND pr.candidate_evaluation_id=$2 ORDER BY pr.submitted_at`,[organizationId,evaluationId]),
-      this.query(`SELECT sd.decision,sd.rationale,sd.decided_at,u.name AS actor FROM shortlist_decisions sd JOIN users u ON u.id=sd.decided_by_id WHERE sd.organization_id=$1 AND sd.candidate_evaluation_id=$2 ORDER BY sd.decided_at`,[organizationId,evaluationId]),
-      this.query(`SELECT ae.action,ae.created_at,u.name AS actor FROM audit_events ae LEFT JOIN users u ON u.id=ae.actor_user_id WHERE ae.organization_id=$1 AND ((ae.subject_type='candidate_evaluation' AND ae.subject_id=$2) OR ae.metadata->>'evaluation_id'=$2) ORDER BY ae.created_at`,[organizationId,evaluationId]),
-    ]) as Row[][];
-    const timeline:Array<{kind:"evaluation"|"review"|"decision"|"audit";label:string;actor:string|null;detail:string;occurredAt:Date}>=[{kind:"evaluation",label:"AI-assisted recommendation recorded",actor:null,detail:`${String(evaluation.recommendation??"No recommendation")} · role fit ${String(evaluation.role_fit??"—")} · confidence ${String(evaluation.evidence_confidence??"—")}`,occurredAt:new Date(String(evaluation.created_at))}];
-    for(const row of reviews)timeline.push({kind:"review",label:"Independent panel review",actor:String(row.actor),detail:`${String(row.recommendation)} · ${String(row.summary)}`,occurredAt:new Date(String(row.submitted_at))});
-    for(const row of decisions)timeline.push({kind:"decision",label:"Human shortlist decision",actor:String(row.actor),detail:`${String(row.decision)} · ${String(row.rationale)}`,occurredAt:new Date(String(row.decided_at))});
-    for(const row of audits)if(String(row.action)!=="candidate.evaluated")timeline.push({kind:"audit",label:String(row.action).replaceAll("_"," ").replaceAll("."," · "),actor:row.actor?String(row.actor):null,detail:"Recorded in the append-only organization audit trail.",occurredAt:new Date(String(row.created_at))});timeline.sort((a,b)=>a.occurredAt.getTime()-b.occurredAt.getTime());
-    return RecommendationReconstructionSchema.parse({evaluation:{id:evaluation.id,candidateId:evaluation.candidate_id,candidateName:evaluation.candidate_name,positionId:evaluation.position_id,positionTitle:evaluation.position_title,rubricId:evaluation.rubric_id,rubricVersion:evaluation.rubric_version,state:evaluation.state,roleFit:evaluation.role_fit,evidenceConfidence:evaluation.evidence_confidence,recommendation:evaluation.recommendation,createdAt:evaluation.created_at},provider:evaluation.provider?{provider:evaluation.provider,model:evaluation.model,promptVersion:evaluation.prompt_version,schemaVersion:evaluation.schema_version,requestId:evaluation.provider_request_id,latencyMs:evaluation.latency_ms,status:evaluation.provider_status}:null,evidenceSnapshot:Array.isArray(evaluation.evidence_snapshot)?evaluation.evidence_snapshot:[],criteria:criteria.map(row=>({id:row.id,name:row.name,classification:row.classification,weight:row.weight,rating:row.rating,score:row.score,evidenceConfidence:row.evidence_confidence,reasoning:row.reasoning,evidenceClaimIds:strings(row.evidence_claim_ids),gaps:strings(row.gaps)})),timeline});
+import { executeQuery } from '@/lib/db';
+import {
+  RecommendationReconstructionSchema,
+  type RecommendationReconstruction,
+} from '../schemas/fairness';
+type Query = (sql: string, params?: unknown[]) => Promise<unknown[]>;
+type Row = Record<string, unknown>;
+const strings = (value: unknown) =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+export class FairnessRepository {
+  constructor(private query: Query = executeQuery) {}
+  async listEvaluations(organizationId: string): Promise<Row[]> {
+    return this.query(
+      `SELECT ce.id,ce.created_at,ce.role_fit,ce.evidence_confidence,ce.recommendation,ce.state,ce.rubric_version,c.display_name AS candidate_name,p.title AS position_title,pe.provider,pe.model,pe.status AS provider_status FROM candidate_evaluations ce JOIN candidates c ON c.id=ce.candidate_id AND c.organization_id=ce.organization_id JOIN positions p ON p.id=ce.position_id AND p.organization_id=ce.organization_id LEFT JOIN provider_executions pe ON pe.id=ce.provider_execution_id AND pe.organization_id=ce.organization_id WHERE ce.organization_id=$1 ORDER BY ce.created_at DESC`,
+      [organizationId],
+    ) as Promise<Row[]>;
+  }
+  async reconstruct(
+    organizationId: string,
+    evaluationId: string,
+  ): Promise<RecommendationReconstruction | null> {
+    const evaluations = (await this.query(
+      `SELECT ce.*,c.display_name AS candidate_name,p.title AS position_title,pe.provider,pe.model,pe.prompt_version,pe.schema_version,pe.provider_request_id,pe.latency_ms,pe.status AS provider_status FROM candidate_evaluations ce JOIN candidates c ON c.id=ce.candidate_id AND c.organization_id=ce.organization_id JOIN positions p ON p.id=ce.position_id AND p.organization_id=ce.organization_id LEFT JOIN provider_executions pe ON pe.id=ce.provider_execution_id AND pe.organization_id=ce.organization_id WHERE ce.organization_id=$1 AND ce.id=$2`,
+      [organizationId, evaluationId],
+    )) as Row[];
+    const evaluation = evaluations[0];
+    if (!evaluation) return null;
+    const [criteria, reviews, decisions, audits] = (await Promise.all([
+      this.query(
+        `SELECT rc.id,rc.name,rc.classification,rc.weight,cr.rating,cr.score,cr.evidence_confidence,cr.reasoning,cr.evidence_claim_ids,cr.gaps FROM criterion_evaluations cr JOIN rubric_criteria rc ON rc.id=cr.criterion_id AND rc.organization_id=cr.organization_id WHERE cr.organization_id=$1 AND cr.candidate_evaluation_id=$2 ORDER BY rc.display_order`,
+        [organizationId, evaluationId],
+      ),
+      this.query(
+        `SELECT pr.recommendation,pr.summary,pr.submitted_at,u.name AS actor FROM panel_reviews pr JOIN organization_members om ON om.id=pr.reviewer_member_id AND om.organization_id=pr.organization_id JOIN users u ON u.id=om.user_id WHERE pr.organization_id=$1 AND pr.candidate_evaluation_id=$2 ORDER BY pr.submitted_at`,
+        [organizationId, evaluationId],
+      ),
+      this.query(
+        `SELECT sd.decision,sd.rationale,sd.decided_at,u.name AS actor FROM shortlist_decisions sd JOIN users u ON u.id=sd.decided_by_id WHERE sd.organization_id=$1 AND sd.candidate_evaluation_id=$2 ORDER BY sd.decided_at`,
+        [organizationId, evaluationId],
+      ),
+      this.query(
+        `SELECT ae.action,ae.created_at,u.name AS actor FROM audit_events ae LEFT JOIN users u ON u.id=ae.actor_user_id WHERE ae.organization_id=$1 AND ((ae.subject_type='candidate_evaluation' AND ae.subject_id=$2) OR ae.metadata->>'evaluation_id'=$2) ORDER BY ae.created_at`,
+        [organizationId, evaluationId],
+      ),
+    ])) as Row[][];
+    const timeline: Array<{
+      kind: 'evaluation' | 'review' | 'decision' | 'audit';
+      label: string;
+      actor: string | null;
+      detail: string;
+      occurredAt: Date;
+    }> = [
+      {
+        kind: 'evaluation',
+        label: 'AI-assisted recommendation recorded',
+        actor: null,
+        detail: `${String(evaluation.recommendation ?? 'No recommendation')} · role fit ${String(evaluation.role_fit ?? '—')} · confidence ${String(evaluation.evidence_confidence ?? '—')}`,
+        occurredAt: new Date(String(evaluation.created_at)),
+      },
+    ];
+    for (const row of reviews)
+      timeline.push({
+        kind: 'review',
+        label: 'Independent panel review',
+        actor: String(row.actor),
+        detail: `${String(row.recommendation)} · ${String(row.summary)}`,
+        occurredAt: new Date(String(row.submitted_at)),
+      });
+    for (const row of decisions)
+      timeline.push({
+        kind: 'decision',
+        label: 'Human shortlist decision',
+        actor: String(row.actor),
+        detail: `${String(row.decision)} · ${String(row.rationale)}`,
+        occurredAt: new Date(String(row.decided_at)),
+      });
+    for (const row of audits)
+      if (String(row.action) !== 'candidate.evaluated')
+        timeline.push({
+          kind: 'audit',
+          label: String(row.action).replaceAll('_', ' ').replaceAll('.', ' · '),
+          actor: row.actor ? String(row.actor) : null,
+          detail: 'Recorded in the append-only organization audit trail.',
+          occurredAt: new Date(String(row.created_at)),
+        });
+    timeline.sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+    return RecommendationReconstructionSchema.parse({
+      evaluation: {
+        id: evaluation.id,
+        candidateId: evaluation.candidate_id,
+        candidateName: evaluation.candidate_name,
+        positionId: evaluation.position_id,
+        positionTitle: evaluation.position_title,
+        rubricId: evaluation.rubric_id,
+        rubricVersion: evaluation.rubric_version,
+        state: evaluation.state,
+        roleFit: evaluation.role_fit,
+        evidenceConfidence: evaluation.evidence_confidence,
+        recommendation: evaluation.recommendation,
+        createdAt: evaluation.created_at,
+      },
+      provider: evaluation.provider
+        ? {
+            provider: evaluation.provider,
+            model: evaluation.model,
+            promptVersion: evaluation.prompt_version,
+            schemaVersion: evaluation.schema_version,
+            requestId: evaluation.provider_request_id,
+            latencyMs: evaluation.latency_ms,
+            status: evaluation.provider_status,
+          }
+        : null,
+      evidenceSnapshot: Array.isArray(evaluation.evidence_snapshot)
+        ? evaluation.evidence_snapshot
+        : [],
+      criteria: criteria.map((row) => ({
+        id: row.id,
+        name: row.name,
+        classification: row.classification,
+        weight: row.weight,
+        rating: row.rating,
+        score: row.score,
+        evidenceConfidence: row.evidence_confidence,
+        reasoning: row.reasoning,
+        evidenceClaimIds: strings(row.evidence_claim_ids),
+        gaps: strings(row.gaps),
+      })),
+      timeline,
+    });
   }
 }

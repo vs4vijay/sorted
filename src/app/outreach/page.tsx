@@ -1,3 +1,108 @@
-import Link from 'next/link';import { AppShell, PageHeader } from '@/components/recruiting/app-shell';import { Icon } from '@/components/recruiting/icons';import { requirePageAccess } from '@/lib/auth/session';import { OutreachRepository } from '@/features/outreach/repositories/outreach-repository';import { createDraft } from './actions';
-const label=(v:unknown)=>String(v??'').replaceAll('_',' ');
-export default async function OutreachPage(){const a=await requirePageAccess('outreach:manage');const repo=new OutreachRepository();const [threads,eligible]=await Promise.all([repo.list(a.organization.id),repo.eligible(a.organization.id)]);return <AppShell active="outreach"><PageHeader title="Outreach" description="Approved candidate communication, replies, and delivery status in one auditable timeline."/><section className="surface outreach-create"><div><span className="eyebrow">HUMAN-APPROVED OUTREACH</span><h2>Create a candidate message</h2><p>Sarvam assists with a bounded draft. A recruiter must review and approve the exact text before sending.</p></div>{eligible.length?<form action={createDraft} className="outreach-create-form"><select name="shortlistDecisionId" aria-label="Shortlisted candidate">{eligible.map(c=><option value={String(c.shortlist_decision_id)} key={String(c.shortlist_decision_id)}>{String(c.display_name)} · {String(c.position_title)}</option>)}</select><select name="purpose" aria-label="Message purpose"><option value="missing_information">Request missing information</option><option value="shortlist_interest">Confirm shortlist interest</option></select><fieldset><legend>Information to request</legend><label><input type="checkbox" name="requestedFields" value="notice_period" defaultChecked/> Notice period</label><label><input type="checkbox" name="requestedFields" value="expected_ctc" defaultChecked/> Expected CTC</label><label><input type="checkbox" name="requestedFields" value="interest"/> Interest</label></fieldset><button className="button primary">Generate reviewable draft</button></form>:<p className="empty-copy">Record a human shortlist decision before starting outreach.</p>}</section>{threads.length?<section className="surface outreach-list"><div className="section-heading"><div><span className="eyebrow">COMMUNICATION TIMELINE</span><h2>{threads.length} outreach thread{threads.length===1?'':'s'}</h2></div></div>{threads.map(t=><Link className="outreach-row" href={`/outreach/${String(t.id)}`} key={String(t.id)}><span className="empty-icon"><Icon name="send" size={18}/></span><div><strong>{String(t.display_name)}</strong><small>{String(t.position_title)} · {label(t.purpose)}</small><span>{String(t.subject??'Draft in progress')}</span></div><span className={`stage ${String(t.status)}`}>{label(t.status)}</span></Link>)}</section>:<div className="surface empty-state large"><span className="empty-icon"><Icon name="send" size={28}/></span><h2>No outreach threads yet</h2><p>Create a draft for a shortlisted candidate. Nothing is sent without approval.</p></div>}</AppShell>}
+import Link from 'next/link';
+import { AppShell, PageHeader } from '@/components/recruiting/app-shell';
+import { Icon } from '@/components/recruiting/icons';
+import { requirePageAccess } from '@/lib/auth/session';
+import { OutreachRepository } from '@/features/outreach/repositories/outreach-repository';
+import { createDraft } from './actions';
+const label = (v: unknown) => String(v ?? '').replaceAll('_', ' ');
+export default async function OutreachPage() {
+  const a = await requirePageAccess('outreach:manage');
+  const repo = new OutreachRepository();
+  const [threads, eligible] = await Promise.all([
+    repo.list(a.organization.id),
+    repo.eligible(a.organization.id),
+  ]);
+  return (
+    <AppShell active="outreach">
+      <PageHeader
+        title="Outreach"
+        description="Approved candidate communication, replies, and delivery status in one auditable timeline."
+      />
+      <section className="surface outreach-create">
+        <div>
+          <span className="eyebrow">HUMAN-APPROVED OUTREACH</span>
+          <h2>Create a candidate message</h2>
+          <p>
+            Sarvam assists with a bounded draft. A recruiter must review and approve the exact text
+            before sending.
+          </p>
+        </div>
+        {eligible.length ? (
+          <form action={createDraft} className="outreach-create-form">
+            <select name="shortlistDecisionId" aria-label="Shortlisted candidate">
+              {eligible.map((c) => (
+                <option
+                  value={String(c.shortlist_decision_id)}
+                  key={String(c.shortlist_decision_id)}
+                >
+                  {String(c.display_name)} · {String(c.position_title)}
+                </option>
+              ))}
+            </select>
+            <select name="purpose" aria-label="Message purpose">
+              <option value="missing_information">Request missing information</option>
+              <option value="shortlist_interest">Confirm shortlist interest</option>
+            </select>
+            <fieldset>
+              <legend>Information to request</legend>
+              <label>
+                <input
+                  type="checkbox"
+                  name="requestedFields"
+                  value="notice_period"
+                  defaultChecked
+                />{' '}
+                Notice period
+              </label>
+              <label>
+                <input type="checkbox" name="requestedFields" value="expected_ctc" defaultChecked />{' '}
+                Expected CTC
+              </label>
+              <label>
+                <input type="checkbox" name="requestedFields" value="interest" /> Interest
+              </label>
+            </fieldset>
+            <button className="button primary">Generate reviewable draft</button>
+          </form>
+        ) : (
+          <p className="empty-copy">Record a human shortlist decision before starting outreach.</p>
+        )}
+      </section>
+      {threads.length ? (
+        <section className="surface outreach-list">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">COMMUNICATION TIMELINE</span>
+              <h2>
+                {threads.length} outreach thread{threads.length === 1 ? '' : 's'}
+              </h2>
+            </div>
+          </div>
+          {threads.map((t) => (
+            <Link className="outreach-row" href={`/outreach/${String(t.id)}`} key={String(t.id)}>
+              <span className="empty-icon">
+                <Icon name="send" size={18} />
+              </span>
+              <div>
+                <strong>{String(t.display_name)}</strong>
+                <small>
+                  {String(t.position_title)} · {label(t.purpose)}
+                </small>
+                <span>{String(t.subject ?? 'Draft in progress')}</span>
+              </div>
+              <span className={`stage ${String(t.status)}`}>{label(t.status)}</span>
+            </Link>
+          ))}
+        </section>
+      ) : (
+        <div className="surface empty-state large">
+          <span className="empty-icon">
+            <Icon name="send" size={28} />
+          </span>
+          <h2>No outreach threads yet</h2>
+          <p>Create a draft for a shortlisted candidate. Nothing is sent without approval.</p>
+        </div>
+      )}
+    </AppShell>
+  );
+}

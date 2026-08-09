@@ -1,13 +1,130 @@
-import "server-only";
-import { OutreachDraftOutputSchema, type OutreachDraftOutput } from "../schemas/outreach";
+import 'server-only';
+import { OutreachDraftOutputSchema, type OutreachDraftOutput } from '../schemas/outreach';
 import { providerEnabled } from '@/lib/providers/provider-controls';
 
-type Context={candidateName:string;positionTitle:string;purpose:"missing_information"|"shortlist_interest";requestedFields:("notice_period"|"expected_ctc"|"interest")[]};
-export type DraftResult={data:OutreachDraftOutput;execution:{provider:"sarvam"|"fixture";model:string;promptVersion:"outreach-draft.prompt.v1";schemaVersion:"outreach-draft.v1";requestId?:string;latencyMs:number;status:"succeeded"|"simulated";error?:{code:string;message:string}}};
-export interface OutreachDraftingProvider{draft(context:Context):Promise<DraftResult>}
+type Context = {
+  candidateName: string;
+  positionTitle: string;
+  purpose: 'missing_information' | 'shortlist_interest';
+  requestedFields: ('notice_period' | 'expected_ctc' | 'interest')[];
+};
+export type DraftResult = {
+  data: OutreachDraftOutput;
+  execution: {
+    provider: 'sarvam' | 'fixture';
+    model: string;
+    promptVersion: 'outreach-draft.prompt.v1';
+    schemaVersion: 'outreach-draft.v1';
+    requestId?: string;
+    latencyMs: number;
+    status: 'succeeded' | 'simulated';
+    error?: { code: string; message: string };
+  };
+};
+export interface OutreachDraftingProvider {
+  draft(context: Context): Promise<DraftResult>;
+}
 
-export class FakeOutreachDraftingProvider implements OutreachDraftingProvider{async draft(c:Context){const asks=c.requestedFields.map(f=>f==="notice_period"?"your current notice period":f==="expected_ctc"?"your expected CTC":"whether you remain interested in the role");const data=OutreachDraftOutputSchema.parse({schemaVersion:"outreach-draft.v1",subject:`Next steps for the ${c.positionTitle} role`,body:`Hello ${c.candidateName},\n\nThank you for your interest in the ${c.positionTitle} role. To help our recruiting team plan the next step, could you please share ${asks.join(" and ")}?\n\nYour response will be reviewed by our recruiting team and will not by itself determine a hiring decision. Please see our candidate privacy notice for how this information is used.\n\nRegards,\nThe hiring team`,requestedFields:c.requestedFields});return {data,execution:{provider:"fixture" as const,model:"deterministic-outreach-fixture-v1",promptVersion:"outreach-draft.prompt.v1" as const,schemaVersion:"outreach-draft.v1" as const,latencyMs:0,status:"simulated" as const}}}}
+export class FakeOutreachDraftingProvider implements OutreachDraftingProvider {
+  async draft(c: Context) {
+    const asks = c.requestedFields.map((f) =>
+      f === 'notice_period'
+        ? 'your current notice period'
+        : f === 'expected_ctc'
+          ? 'your expected CTC'
+          : 'whether you remain interested in the role',
+    );
+    const data = OutreachDraftOutputSchema.parse({
+      schemaVersion: 'outreach-draft.v1',
+      subject: `Next steps for the ${c.positionTitle} role`,
+      body: `Hello ${c.candidateName},\n\nThank you for your interest in the ${c.positionTitle} role. To help our recruiting team plan the next step, could you please share ${asks.join(' and ')}?\n\nYour response will be reviewed by our recruiting team and will not by itself determine a hiring decision. Please see our candidate privacy notice for how this information is used.\n\nRegards,\nThe hiring team`,
+      requestedFields: c.requestedFields,
+    });
+    return {
+      data,
+      execution: {
+        provider: 'fixture' as const,
+        model: 'deterministic-outreach-fixture-v1',
+        promptVersion: 'outreach-draft.prompt.v1' as const,
+        schemaVersion: 'outreach-draft.v1' as const,
+        latencyMs: 0,
+        status: 'simulated' as const,
+      },
+    };
+  }
+}
 
-export class SarvamOutreachDraftingProvider implements OutreachDraftingProvider{async draft(context:Context){const started=Date.now();const response=await fetch("https://api.sarvam.ai/v1/chat/completions",{method:"POST",headers:{"api-subscription-key":process.env.SARVAM_API_KEY!,"content-type":"application/json"},body:JSON.stringify({model:"sarvam-105b",temperature:0.2,max_tokens:1200,messages:[{role:"system",content:"Draft a concise, respectful recruiting email for an Indian candidate. Use only supplied facts. Do not promise employment, compensation, interview, or selection. Include every requested field and no sensitive or unsupported claim. Return JSON only."},{role:"user",content:JSON.stringify(context)}],response_format:{type:"json_object"}})});const body=await response.json() as {id?:string;choices?:{message?:{content?:string}}[];error?:{code?:string;message?:string}};if(!response.ok||!body.choices?.[0]?.message?.content)throw Object.assign(new Error(body.error?.message??"Sarvam drafting failed"),{code:body.error?.code??`http_${response.status}`});const data=OutreachDraftOutputSchema.parse(JSON.parse(body.choices[0].message.content));if(data.requestedFields.length!==context.requestedFields.length||context.requestedFields.some(f=>!data.requestedFields.includes(f)))throw Object.assign(new Error("Draft did not preserve the approved request fields."),{code:"unsupported_draft"});return {data,execution:{provider:"sarvam" as const,model:"sarvam-105b",promptVersion:"outreach-draft.prompt.v1" as const,schemaVersion:"outreach-draft.v1" as const,requestId:body.id,latencyMs:Date.now()-started,status:"succeeded" as const}}}}
+export class SarvamOutreachDraftingProvider implements OutreachDraftingProvider {
+  async draft(context: Context) {
+    const started = Date.now();
+    const response = await fetch('https://api.sarvam.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'api-subscription-key': process.env.SARVAM_API_KEY!,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'sarvam-105b',
+        temperature: 0.2,
+        max_tokens: 1200,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Draft a concise, respectful recruiting email for an Indian candidate. Use only supplied facts. Do not promise employment, compensation, interview, or selection. Include every requested field and no sensitive or unsupported claim. Return JSON only.',
+          },
+          { role: 'user', content: JSON.stringify(context) },
+        ],
+        response_format: { type: 'json_object' },
+      }),
+    });
+    const body = (await response.json()) as {
+      id?: string;
+      choices?: { message?: { content?: string } }[];
+      error?: { code?: string; message?: string };
+    };
+    if (!response.ok || !body.choices?.[0]?.message?.content)
+      throw Object.assign(new Error(body.error?.message ?? 'Sarvam drafting failed'), {
+        code: body.error?.code ?? `http_${response.status}`,
+      });
+    const data = OutreachDraftOutputSchema.parse(JSON.parse(body.choices[0].message.content));
+    if (
+      data.requestedFields.length !== context.requestedFields.length ||
+      context.requestedFields.some((f) => !data.requestedFields.includes(f))
+    )
+      throw Object.assign(new Error('Draft did not preserve the approved request fields.'), {
+        code: 'unsupported_draft',
+      });
+    return {
+      data,
+      execution: {
+        provider: 'sarvam' as const,
+        model: 'sarvam-105b',
+        promptVersion: 'outreach-draft.prompt.v1' as const,
+        schemaVersion: 'outreach-draft.v1' as const,
+        requestId: body.id,
+        latencyMs: Date.now() - started,
+        status: 'succeeded' as const,
+      },
+    };
+  }
+}
 
-export async function draftOutreach(context:Context):Promise<DraftResult>{if(!providerEnabled('sarvam'))return new FakeOutreachDraftingProvider().draft(context);try{return await new SarvamOutreachDraftingProvider().draft(context)}catch(error){const fallback=await new FakeOutreachDraftingProvider().draft(context);return {...fallback,execution:{...fallback.execution,error:{code:String((error as {code?:string}).code??"provider_error"),message:"Sarvam drafting was unavailable; deterministic simulated output was used."}}}}}
+export async function draftOutreach(context: Context): Promise<DraftResult> {
+  if (!providerEnabled('sarvam')) return new FakeOutreachDraftingProvider().draft(context);
+  try {
+    return await new SarvamOutreachDraftingProvider().draft(context);
+  } catch (error) {
+    const fallback = await new FakeOutreachDraftingProvider().draft(context);
+    return {
+      ...fallback,
+      execution: {
+        ...fallback.execution,
+        error: {
+          code: String((error as { code?: string }).code ?? 'provider_error'),
+          message: 'Sarvam drafting was unavailable; deterministic simulated output was used.',
+        },
+      },
+    };
+  }
+}

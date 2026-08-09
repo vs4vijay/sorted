@@ -31,11 +31,11 @@ export async function GET(request: NextRequest) {
 
     const items = await executeQuery(
       `SELECT * FROM items ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      [limit, offset],
     );
 
     const totalResult = await executeQuery<{ count: number }>(
-      `SELECT COUNT(*) as count FROM items`
+      `SELECT COUNT(*) as count FROM items`,
     );
     const total = Number(totalResult[0]?.count || 0);
 
@@ -50,10 +50,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Failed to fetch items:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch items' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
   }
 }
 
@@ -71,16 +68,14 @@ export async function POST(request: NextRequest) {
     const description = data.description || null;
 
     // Create item using raw SQL
-    await executeQuery(
-      `INSERT INTO items (id, name, description) VALUES ($1, $2, $3)`,
-      [id, name, description]
-    );
+    await executeQuery(`INSERT INTO items (id, name, description) VALUES ($1, $2, $3)`, [
+      id,
+      name,
+      description,
+    ]);
 
     // Fetch the created item
-    const items = await executeQuery(
-      `SELECT * FROM items WHERE id = $1`,
-      [id]
-    );
+    const items = await executeQuery(`SELECT * FROM items WHERE id = $1`, [id]);
     const item = items[0];
 
     // Enqueue background job if requested
@@ -96,20 +91,17 @@ export async function POST(request: NextRequest) {
         item,
         backgroundJobEnqueued: data.processInBackground,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Validation failed', details: error.issues },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     console.error('Failed to create item:', error);
-    return NextResponse.json(
-      { error: 'Failed to create item' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to create item' }, { status: 500 });
   }
 }

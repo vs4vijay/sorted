@@ -44,7 +44,10 @@ describe('unique constraint mapping', () => {
     expect(
       isUniqueConstraintViolation({
         code: 'P2010',
-        meta: { code: '23505', message: 'duplicate key value violates unique constraint "users_email_key"' },
+        meta: {
+          code: '23505',
+          message: 'duplicate key value violates unique constraint "users_email_key"',
+        },
       }),
     ).toBe(true);
     expect(isUniqueConstraintViolation({ message: 'connection refused' })).toBe(false);
@@ -63,7 +66,10 @@ describe('unique constraint mapping', () => {
     expect(
       mapUniqueViolationToSetupState({
         code: 'P2010',
-        meta: { code: '23505', message: 'duplicate key value violates unique constraint "users_email_key"' },
+        meta: {
+          code: '23505',
+          message: 'duplicate key value violates unique constraint "users_email_key"',
+        },
       }),
     ).toEqual(setupConflictState({ emailTaken: true }));
   });

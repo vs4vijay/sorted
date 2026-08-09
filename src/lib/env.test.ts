@@ -7,7 +7,9 @@ describe('server environment', () => {
   });
 
   test('allows local auth bypass in the development app environment', () => {
-    expect(parseServerEnv({ APP_ENV: 'development', LOCAL_AUTH_BYPASS: 'true' }).LOCAL_AUTH_BYPASS).toBe(true);
+    expect(
+      parseServerEnv({ APP_ENV: 'development', LOCAL_AUTH_BYPASS: 'true' }).LOCAL_AUTH_BYPASS,
+    ).toBe(true);
   });
 
   test('rejects local auth bypass outside development', () => {

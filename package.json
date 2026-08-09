@@ -9,6 +9,8 @@
     "dev:worker": "bun --conditions=react-server run src/lib/worker.ts",
     "test": "bun test",
     "build": "next build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "start": "next start -p ${PORT:-7070}",
     "lint": "eslint",
     "db:generate": "prisma generate",
@@ -43,10 +45,18 @@
     "@types/react-dom": "^19.2.4",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.2.11",
+    "prettier": "^3.9.6",
     "prisma": "^6.19.3",
+    "prettier": "^3.9.6",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3"
   },
-  "ignoreScripts": ["sharp", "unrs-resolver"],
-  "trustedDependencies": ["sharp", "unrs-resolver"]
+  "ignoreScripts": [
+    "sharp",
+    "unrs-resolver"
+  ],
+  "trustedDependencies": [
+    "sharp",
+    "unrs-resolver"
+  ]
 }

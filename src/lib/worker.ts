@@ -6,7 +6,7 @@ const postgresQueue = queue as PostgresQueue;
 export async function enqueueJob<T extends JobPayload = JobPayload>(
   taskIdentifier: string,
   payload: T,
-  options?: JobOptions
+  options?: JobOptions,
 ): Promise<Job> {
   const job = await postgresQueue.enqueue<T>(taskIdentifier, payload, options);
   console.log(`📝 Enqueued job: ${taskIdentifier} (${job.id})`);

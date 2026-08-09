@@ -1,4 +1,4 @@
-import { JobPayload, Job } from '@/lib/queue/types';
+import { JobPayload } from '@/lib/queue/types';
 import { executeQuery } from '@/lib/db';
 
 interface ProcessItemPayload extends JobPayload {
@@ -14,15 +14,12 @@ interface Item {
   updated_at: Date;
 }
 
-export default async function processItem(payload: JobPayload, _job: Job): Promise<void> {
+export default async function processItem(payload: JobPayload): Promise<void> {
   const { itemId, action = 'process' } = payload as ProcessItemPayload;
 
   console.log(`Processing item ${itemId} with action: ${action}`);
 
-  const items = await executeQuery<Item>(
-    `SELECT * FROM items WHERE id = $1`,
-    [itemId]
-  );
+  const items = await executeQuery<Item>(`SELECT * FROM items WHERE id = $1`, [itemId]);
   const item = items[0];
 
   if (!item) {
@@ -34,10 +31,7 @@ export default async function processItem(payload: JobPayload, _job: Job): Promi
 
   await new Promise((resolve) => setTimeout(resolve, Math.random() * 2000 + 1000));
 
-  await executeQuery(
-    `UPDATE items SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-    [itemId]
-  );
+  await executeQuery(`UPDATE items SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [itemId]);
 
   console.log(`Successfully processed item: ${item.name}`);
 }

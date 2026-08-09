@@ -8,4 +8,3 @@ export const recruitingService = {
   listCandidates: async () => candidates,
   getCandidate: async (id: string) => candidates.find((candidate) => candidate.id === id) ?? null,
 };
-
