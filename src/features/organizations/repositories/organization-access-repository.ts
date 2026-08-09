@@ -83,4 +83,23 @@ export class OrganizationAccessRepository {
       },
     });
   }
+
+  async createFirstOrganization(input: { userId: string; name: string; email: string; organizationId: string; organizationName: string; organizationSlug: string; membershipId: string; auditEventId: string; timezone: string; defaultLocale: string }): Promise<void> {
+    await this.query(
+      `WITH created_user AS (INSERT INTO users (id, email, name) VALUES ($1, $2, $3) RETURNING id),
+      created_organization AS (INSERT INTO organizations (id, name, slug, timezone, default_locale) SELECT $4, $5, $6, $7, $8 FROM created_user RETURNING id),
+      created_membership AS (INSERT INTO organization_members (id, organization_id, user_id, role) SELECT $9, created_organization.id, created_user.id, 'admin' FROM created_organization CROSS JOIN created_user RETURNING id)
+      INSERT INTO audit_events (id, organization_id, actor_user_id, action, subject_type, subject_id, metadata)
+      SELECT $10, $4, $1, 'organization.created', 'organization', $4, json_build_object('role', 'admin') FROM created_membership`,
+      [input.userId, input.email, input.name, input.organizationId, input.organizationName, input.organizationSlug, input.timezone, input.defaultLocale, input.membershipId, input.auditEventId],
+    );
+  }
+
+  async createSession(input: { id: string; userId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
+    await this.query(`INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)`, [input.id, input.userId, input.tokenHash, input.expiresAt]);
+  }
+
+  async revokeSession(sessionId: string): Promise<void> {
+    await this.query(`UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP WHERE id = $1 AND revoked_at IS NULL`, [sessionId]);
+  }
 }

@@ -41,6 +41,15 @@ export const CreateInvitationInputSchema = z.object({
   role: OrganizationRoleSchema,
 });
 
+export const FirstRunSetupInputSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  email: z.string().trim().toLowerCase().pipe(z.email()),
+  organizationName: z.string().trim().min(2).max(120),
+  organizationSlug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  timezone: z.string().min(1).default('Asia/Kolkata'),
+  defaultLocale: z.string().min(2).max(20).default('en-IN'),
+});
+
 export type OrganizationRole = z.infer<typeof OrganizationRoleSchema>;
 export type ResolvedOrganizationAccess = z.infer<typeof ResolvedOrganizationAccessSchema>;
 export type OrganizationPermission = typeof rolePermissions[OrganizationRole][number];

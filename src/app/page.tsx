@@ -2,8 +2,12 @@ import Link from 'next/link';
 import { AppShell, CandidateAvatar, PageHeader } from '@/components/recruiting/app-shell';
 import { Icon } from '@/components/recruiting/icons';
 import { recruitingService } from '@/features/sorted/services/recruiting-service';
+import { getCurrentAccess } from '@/lib/auth/session';
+import { redirect } from 'next/navigation';
 
 export default async function DashboardPage() {
+  const access = await getCurrentAccess();
+  if (!access) redirect('/setup');
   const [positions, candidates] = await Promise.all([recruitingService.listPositions(), recruitingService.listCandidates()]);
   const reviewed = candidates.filter((candidate) => candidate.stage === 'under_review');
   return <AppShell active="dashboard">
