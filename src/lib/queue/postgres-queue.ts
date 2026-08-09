@@ -192,7 +192,7 @@ export class PostgresQueue implements IQueue {
     const pglite = await getPGliteInstance();
 
     if (!pglite) {
-      console.warn('⚠️  LISTEN/NOTIFY not available (using PGlite without notify support)');
+      console.warn('⚠️  LISTEN/NOTIFY unavailable on PostgreSQL; worker will rely on polling');
       return () => {};
     }
 
