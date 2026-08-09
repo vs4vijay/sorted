@@ -3,11 +3,12 @@ import Link from "next/link";
 import { AppShell, CandidateAvatar } from "@/components/recruiting/app-shell";
 import { requireCurrentAccess } from "@/lib/auth/session";
 import { EvidenceProfileRepository } from "@/features/candidates/repositories/evidence-profile-repository";
-import { addEvidenceClaim, reviewEvidenceClaim } from "../actions";
+import { addEvidenceClaim, reviewEvidenceClaim, createCandidatePrivacyRequest, decideCandidatePrivacyRequest } from "../actions";
 import { matchCandidate } from "../actions";
 import { PositionRepository } from "@/features/positions/repositories/position-repository";
 import { EvaluationRepository } from "@/features/evaluations/repositories/evaluation-repository";
 import { roleCan } from "@/features/organizations/schemas/access";
+import { CandidatePrivacyRepository } from "@/features/candidates/repositories/candidate-privacy-repository";
 const title = (value: unknown) => String(value ?? "").replaceAll("_", " ");
 export default async function CandidatePage({
   params,
@@ -19,12 +20,14 @@ export default async function CandidatePage({
   const access = await requireCurrentAccess();
   const { id } = await params;
   const selectedPosition=(await searchParams).position;
-  const [profile,positions,evaluationValue] = await Promise.all([new EvidenceProfileRepository().getProfile(access.organization.id,id),new PositionRepository().list(access.organization.id),selectedPosition?new EvaluationRepository().latest(access.organization.id,id,selectedPosition):Promise.resolve(null)]);
+  const [profile,positions,evaluationValue,privacyRequests] = await Promise.all([new EvidenceProfileRepository().getProfile(access.organization.id,id),new PositionRepository().list(access.organization.id),selectedPosition?new EvaluationRepository().latest(access.organization.id,id,selectedPosition):Promise.resolve(null),new CandidatePrivacyRepository().list(access.organization.id,id)]);
   const evaluation=evaluationValue as (Record<string,unknown>&{criteria:Record<string,unknown>[]})|null;
   if (!profile) notFound();
   const candidate = profile.candidate,
     name = String(candidate.display_name);
   const canManageCandidates=roleCan(access.membership.role,"candidates:manage");
+  const canManageOrganization=roleCan(access.membership.role,"organization:manage");
+  const canExport=roleCan(access.membership.role,"candidates:export");
   const claims = access.membership.role === "technical_reviewer"
     ? profile.claims.filter((claim) => !/(ctc|compensation|salary|pay)/i.test(`${claim.label} ${claim.claim_type}`))
     : profile.claims;
@@ -276,6 +279,11 @@ export default async function CandidatePage({
           </p>
         </aside>
       </div>
+      <section className="surface privacy-center">
+        <div className="privacy-center-header"><div><span className="eyebrow">CANDIDATE PRIVACY</span><h2>Correction, export and deletion</h2><p>Sorted uses authorized candidate sources to support human recruiting decisions. Candidates may request a copy, correction, deletion or outreach opt-out. Approved deletion irreversibly removes direct identifiers and private files while retaining anonymized decision records required for accountability.</p></div>{canExport&&candidate.profile_status!=="anonymized"?<a className="button secondary" href={`/api/candidates/${id}/export`}>Download data export</a>:null}</div>
+        {canManageCandidates&&candidate.profile_status!=="anonymized"?<form action={createCandidatePrivacyRequest} className="privacy-request-form"><input type="hidden" name="candidateId" value={id}/><select name="requestType" aria-label="Privacy request type"><option value="correction">Correction request</option><option value="export">Data export request</option><option value="deletion">Deletion request</option></select><textarea name="details" required minLength={10} placeholder="Record the candidate’s request and verification context"/><button className="button primary">Record request</button></form>:<p className="privacy-callout">This profile has been irreversibly anonymized. Historical evaluation and human-decision records remain for auditability.</p>}
+        <div className="privacy-request-list">{privacyRequests.length===0?<p>No privacy requests recorded.</p>:privacyRequests.map(request=><article key={String(request.id)} className="privacy-request"><div><strong>{title(request.request_type)} request</strong><span className={`stage ${String(request.status)}`}>{title(request.status)}</span><p>{String(request.details)}</p>{request.decision_rationale?<small>Decision rationale: {String(request.decision_rationale)}</small>:null}</div>{canManageOrganization&&request.status==="requested"?<form action={decideCandidatePrivacyRequest}><input type="hidden" name="candidateId" value={id}/><input type="hidden" name="requestId" value={String(request.id)}/><input name="rationale" required minLength={10} placeholder="Decision rationale"/><button className="button secondary" name="decision" value="approve">Approve</button><button className="button ghost" name="decision" value="decline">Decline</button></form>:null}</article>)}</div>
+      </section>
     </AppShell>
   );
 }
