@@ -140,6 +140,39 @@ These exclusions protect the core outcome: producing a trustworthy shortlist and
 9. Candidate-facing messages require approval until an organization explicitly configures a safe automation policy.
 10. Every query and mutation is organization-scoped at the server boundary.
 
+## Candidate list and JD-matching modes
+
+Sorted supports both an organization-wide talent pool and position-specific matching. The candidate profile is global within the organization; scores are always contextual to a particular approved JD/rubric.
+
+| View | Candidates shown | Score behavior |
+|---|---|---|
+| All Candidates | Every candidate in the organization’s talent pool | No universal score; show profile completeness and evidence confidence only |
+| Position Candidates | Candidates already assigned/applied to a selected position | Show the latest score for that position’s approved JD/rubric |
+| Talent Pool Match | Talent-pool candidates not yet assigned to the selected position | Allow matching on demand or in bulk, then show position-specific scores |
+| Candidate Applications | One candidate across all positions | Show a different score and status for each position/JD |
+
+The same candidate may score `86` for Senior Backend Engineer and `62` for Engineering Manager because the requirements differ. Sorted must never store or display a single context-free “candidate quality” score.
+
+### Required candidate-list controls
+
+- Filter by one or more positions/JDs.
+- Filter by `unassigned`, `applied`, `matched`, `shortlisted`, or another pipeline stage.
+- Filter by match-score range and evidence-confidence range for a selected position.
+- Filter by evaluation state: `not_matched`, `queued`, `evaluated`, `stale`, or `failed`.
+- Filter by must-have criterion outcome, location, experience, notice period, skills, source, reviewer, and outreach status.
+- Sort by position-specific role fit, evidence confidence, last activity, import date, or profile completeness.
+- Save named views such as “Backend candidates above 75 with notice period under 60 days.”
+- Bulk-select talent-pool candidates and run “Match against JD.”
+- Add an evaluated candidate to the position only after an explicit recruiter action; evaluation alone does not create an application unless configured and confirmed.
+
+### JD availability rules
+
+- With no JD or approved manual rubric, candidates remain searchable in the talent pool but have no role-fit score.
+- A pasted or uploaded JD must be converted into a structured rubric and approved before official scoring.
+- A position may use a manually authored rubric when no formal JD exists.
+- Updating a JD/rubric marks prior evaluations as `stale`; it does not silently overwrite them.
+- Matching can be triggered from the position, the candidate list, or a candidate profile, but all entry points call the same evaluation service.
+
 ## 5. Shared definition of done
 
 Every vertical slice must include:
@@ -447,6 +480,8 @@ For an approved position, the hiring panel can see each candidate’s criterion-
 #### Evaluation model
 
 - Add `candidate_evaluations`, `criterion_evaluations`, and `evaluation_runs`.
+- Key every official evaluation by `organization_id`, `candidate_id`, `position_id`, `rubric_version_id`, and evidence-snapshot version.
+- Enforce at most one current evaluation per candidate and rubric version while retaining all historical runs.
 - Snapshot candidate evidence and rubric versions used by every evaluation.
 - Score job-relevant criteria only.
 - Produce separate `role_fit` and `evidence_confidence` values.
@@ -464,7 +499,12 @@ For an approved position, the hiring panel can see each candidate’s criterion-
 
 #### Experience
 
+- Organization-wide Candidates table with an optional position/JD selector.
 - Position candidate table with filters and sortable dimensions.
+- “Match against JD” for one candidate, a selection, or the eligible talent pool.
+- Position/JD filter that shows the candidate’s score, confidence, application stage, and evaluation freshness for the selected position.
+- Multi-position candidate view that shows the candidate’s different score and status for every application/evaluation.
+- Clear `Not matched`, `Matching`, `Matched`, `Stale`, and `Failed` states instead of treating missing scores as zero.
 - Candidate scorecard with criterion, rating, evidence, gaps, and reviewer status.
 - Side-by-side comparison for a small candidate set.
 - Re-run evaluation when the rubric or evidence changes, while preserving history.
@@ -473,6 +513,11 @@ For an approved position, the hiring panel can see each candidate’s criterion-
 ### Acceptance criteria
 
 - The demo position ranks candidates using the approved rubric.
+- The All Candidates view works without any JD and does not invent a universal candidate score.
+- Selecting a position/JD changes scores and filters to that position’s evaluation context.
+- A recruiter can match existing talent-pool candidates against a newly created position without re-uploading their CVs.
+- One candidate can retain distinct scores for multiple positions.
+- Updating the approved rubric marks existing scores stale and allows controlled re-evaluation.
 - Every rating links to candidate evidence or clearly says evidence is missing.
 - Role fit and evidence confidence are displayed separately.
 - Changing the rubric creates new evaluations without rewriting historical results.
