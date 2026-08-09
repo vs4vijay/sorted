@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { OrganizationAccessRepository } from '@/features/organizations/repositories/organization-access-repository';
 import {
@@ -52,6 +53,15 @@ export async function requireCurrentAccess(
   if (!access) throw new AccessError('unauthenticated', 'Sign in to continue.');
   if (permission && !roleCan(access.membership.role, permission)) {
     throw new AccessError('forbidden', 'Your organization role does not allow this action.');
+  }
+  return access;
+}
+
+export async function requirePageAccess(permission?: OrganizationPermission): Promise<ResolvedOrganizationAccess> {
+  const access = await getCurrentAccess();
+  if (!access) redirect('/sign-in');
+  if (permission && !roleCan(access.membership.role, permission)) {
+    throw new AccessError('forbidden', 'Your organization role does not allow this page.');
   }
   return access;
 }

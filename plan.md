@@ -196,7 +196,7 @@ Every vertical slice must include:
 
 ## Delivery progress tracker
 
-Last updated: 2026-08-09 (Slices 8–10 complete for hackathon scope; Slice 11 privacy lifecycle and retention enforcement complete; launch readiness remains in progress)
+Last updated: 2026-08-10 (local signup and complete synthetic recruiting journey repaired and re-verified; launch readiness remains in progress)
 
 | Slice | Status | Evidence and remaining work |
 |---|---|---|
@@ -215,6 +215,7 @@ Last updated: 2026-08-09 (Slices 8–10 complete for hackathon scope; Slice 11 p
 
 ### Current handoff
 
+- 2026-08-10 journey hardening: `bun run dev` now initializes the local PGlite schema before serving requests; protected pages redirect unauthenticated sessions; deterministic CV fallback extracts source-backed name, headline, location, email, phone, ownership, and notice-period evidence; outreach disables and safely reports sends without an email; dashboard/JD copy uses persisted user and position data; final shortlist decisions are idempotent and the completed form is hidden. All 78 tests, TypeScript, lint (0 errors; 6 pre-existing warnings), and the production build pass. Chrome verified signup → approved position → DOCX import → evidence/matching → panel shortlist → approved simulated email → reply → recruiter screening with zero console errors.
 - `/setup` collision UX is implemented locally and on `main` for field-level email/slug errors; case-insensitive email uniqueness hardening (`users_email_lower_key`, write-path `LOWER(email)`, PGlite atomicity tests) is on `fix/setup-review-hardening` and still needs merge + Render redeploy before treating live production as fully verified. Use a unique email/slug (not the old `acme-india` / `ananya@company.in` placeholders).
 - Continue Slice 11 with the candidate-facing hosted privacy-request and opt-out entry point. The retention editor and enforcement job are complete: policy changes are audited, scheduled scans are idempotent, and expired records become deletion requests requiring a separate administrator decision.
 - Slice 7 keeps generated drafts, recruiter approval, provider delivery, candidate replies, and confirmed structured profile updates as distinct auditable states. Editing invalidates approval; only an approved message can transition to the idempotent send claim.

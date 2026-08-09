@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AppShell, CandidateAvatar } from "@/components/recruiting/app-shell";
-import { requireCurrentAccess } from "@/lib/auth/session";
+import { requirePageAccess } from "@/lib/auth/session";
 import { EvidenceProfileRepository } from "@/features/candidates/repositories/evidence-profile-repository";
 import { addEvidenceClaim, reviewEvidenceClaim, createCandidatePrivacyRequest, decideCandidatePrivacyRequest } from "../actions";
 import { matchCandidate } from "../actions";
@@ -17,7 +17,7 @@ export default async function CandidatePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ position?: string }>;
 }) {
-  const access = await requireCurrentAccess();
+  const access = await requirePageAccess();
   const { id } = await params;
   const selectedPosition=(await searchParams).position;
   const [profile,positions,evaluationValue,privacyRequests] = await Promise.all([new EvidenceProfileRepository().getProfile(access.organization.id,id),new PositionRepository().list(access.organization.id),selectedPosition?new EvaluationRepository().latest(access.organization.id,id,selectedPosition):Promise.resolve(null),new CandidatePrivacyRepository().list(access.organization.id,id)]);

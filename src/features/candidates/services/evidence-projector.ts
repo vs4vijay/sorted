@@ -11,5 +11,9 @@ export function projectEvidence(markdown:string):ProjectedClaim[]{
   if(project)claims.push({claimType:"project",label:"Project evidence",value:project,section:"Projects / experience",excerpt:project,confidence:.72});
   const education=lines.find(v=>/(bachelor|master|b\.tech|m\.tech|university|college)/i.test(v));
   if(education)claims.push({claimType:"education",label:"Education",value:education,section:"Education",excerpt:education,confidence:.82});
+  const ownership=lines.find(v=>/\b(mentored|managed|led|owned|ownership|incident reviews?|reliability improvements?)\b/i.test(v));
+  if(ownership&&ownership!==employment&&ownership!==project)claims.push({claimType:"employment",label:"Technical ownership",value:ownership,section:"Experience",excerpt:ownership,confidence:.78});
+  const notice=text.match(/\b(?:notice period(?: is)?|available (?:in|after)|joining (?:in|after))\s*(?:of\s*)?(\d{1,3})\s*days?\b/i);
+  if(notice)claims.push({claimType:"logistics",label:"Notice period",value:`${notice[1]} days`,section:"Availability",excerpt:text.slice(Math.max(0,(notice.index??0)-40),Math.min(text.length,(notice.index??0)+notice[0].length+80)),confidence:.9});
   return claims.slice(0,30);
 }
