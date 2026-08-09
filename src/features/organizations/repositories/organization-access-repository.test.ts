@@ -71,4 +71,32 @@ describe('OrganizationAccessRepository', () => {
     expect(capturedSql).toContain('id = $1 AND organization_id = $2');
     expect(capturedParams.slice(0, 2)).toEqual(['member-2', 'org-1']);
   });
+
+  test('revokes only a pending invitation in the resolved organization and audits it', async () => {
+    let capturedSql = '';
+    let capturedParams: unknown[] = [];
+    const repository = new OrganizationAccessRepository(async (sql, params) => {
+      capturedSql = sql; capturedParams = params ?? []; return [{ revoked: true }];
+    });
+    expect(await repository.revokeInvitation({ invitationId: 'invite-1', organizationId: 'org-1', actorUserId: 'user-1', auditEventId: 'audit-1' })).toBe(true);
+    expect(capturedSql).toContain("organization_id = $2 AND status = 'pending'");
+    expect(capturedSql).toContain('invitation.revoked');
+    expect(capturedParams.slice(0, 3)).toEqual(['invite-1', 'org-1', 'user-1']);
+  });
+
+  test('accepts an invitation atomically without trusting browser organization input', async () => {
+    let capturedSql = '';
+    let capturedParams: unknown[] = [];
+    const repository = new OrganizationAccessRepository(async (sql, params) => {
+      capturedSql = sql; capturedParams = params ?? []; return [{ organization_slug: 'acme-india' }];
+    });
+    const accepted = await repository.acceptInvitation({ tokenHash: 'token-hash', name: 'Ravi Reviewer', userId: 'user-2',
+      membershipId: 'member-2', sessionId: 'session-2', sessionTokenHash: 'session-hash',
+      sessionExpiresAt: new Date('2026-08-23'), auditEventId: 'audit-2' });
+    expect(accepted).toEqual({ organizationSlug: 'acme-india' });
+    expect(capturedSql).toContain('invitations.token_hash = $1');
+    expect(capturedSql).toContain('invitation.accepted');
+    expect(capturedSql).toContain('ON CONFLICT (organization_id, user_id) DO NOTHING');
+    expect(capturedParams).not.toContain('org-1');
+  });
 });

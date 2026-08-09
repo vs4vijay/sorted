@@ -46,6 +46,19 @@ export const UpdateMemberRoleInputSchema = z.object({
   role: OrganizationRoleSchema,
 });
 
+export const RevokeInvitationInputSchema = z.object({ invitationId: z.string().uuid() });
+
+export const AcceptInvitationInputSchema = z.object({
+  token: z.string().min(32).max(256),
+  name: z.string().trim().min(2).max(100),
+});
+
+export const InvitationAcceptanceViewSchema = z.object({
+  invitationId: z.string().min(1), organizationId: z.string().min(1), organizationName: z.string().min(2),
+  organizationSlug: z.string().min(1), email: z.email(), role: OrganizationRoleSchema,
+  status: InvitationStatusSchema, expiresAt: z.coerce.date(),
+});
+
 export const OrganizationMemberViewSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -76,6 +89,7 @@ export const FirstRunSetupInputSchema = z.object({
 export type OrganizationRole = z.infer<typeof OrganizationRoleSchema>;
 export type OrganizationMemberView = z.infer<typeof OrganizationMemberViewSchema>;
 export type InvitationView = z.infer<typeof InvitationViewSchema>;
+export type InvitationAcceptanceView = z.infer<typeof InvitationAcceptanceViewSchema>;
 export type ResolvedOrganizationAccess = z.infer<typeof ResolvedOrganizationAccessSchema>;
 export type OrganizationPermission = typeof rolePermissions[OrganizationRole][number];
 
