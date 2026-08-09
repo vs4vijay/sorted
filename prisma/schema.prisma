@@ -12,7 +12,7 @@ model Item {
   name        String
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedAt   DateTime @updatedAt @default(now()) @map("updated_at")
 
   @@map("items")
 }
