@@ -142,6 +142,7 @@ describe('OrganizationAccessRepository', () => {
       sessionExpiresAt: new Date('2026-08-23'),
     });
     expect(capturedSql).toContain('INSERT INTO users');
+    expect(capturedSql).toContain('LOWER($2)');
     expect(capturedSql).toContain('INSERT INTO organizations');
     expect(capturedSql).toContain('INSERT INTO organization_members');
     expect(capturedSql).toContain('INSERT INTO audit_events');

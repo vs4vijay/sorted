@@ -22,13 +22,6 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
   }
 
   const repository = new OrganizationAccessRepository();
-  const conflicts = await repository.findSetupConflicts(
-    parsed.data.email,
-    parsed.data.organizationSlug,
-  );
-  const conflictState = setupConflictState(conflicts);
-  if (conflictState) return conflictState;
-
   const ids = {
     userId: randomUUID(),
     organizationId: randomUUID(),
@@ -40,6 +33,13 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
 
   try {
+    const conflicts = await repository.findSetupConflicts(
+      parsed.data.email,
+      parsed.data.organizationSlug,
+    );
+    const conflictState = setupConflictState(conflicts);
+    if (conflictState) return conflictState;
+
     const passwordHash = await hashPassword(parsed.data.password);
     await repository.createFirstOrganizationWithSession({
       ...ids,
