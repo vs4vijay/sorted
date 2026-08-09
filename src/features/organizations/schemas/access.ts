@@ -38,7 +38,30 @@ export const ResolvedOrganizationAccessSchema = z.object({
 
 export const CreateInvitationInputSchema = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email()),
+  role: OrganizationRoleSchema.exclude(['admin']),
+});
+
+export const UpdateMemberRoleInputSchema = z.object({
+  membershipId: z.string().uuid(),
   role: OrganizationRoleSchema,
+});
+
+export const OrganizationMemberViewSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  email: z.email(),
+  role: OrganizationRoleSchema,
+  joinedAt: z.coerce.date(),
+  isCurrentUser: z.boolean(),
+});
+
+export const InvitationViewSchema = z.object({
+  id: z.string().min(1),
+  email: z.email(),
+  role: OrganizationRoleSchema,
+  status: InvitationStatusSchema,
+  expiresAt: z.coerce.date(),
+  createdAt: z.coerce.date(),
 });
 
 export const FirstRunSetupInputSchema = z.object({
@@ -51,6 +74,8 @@ export const FirstRunSetupInputSchema = z.object({
 });
 
 export type OrganizationRole = z.infer<typeof OrganizationRoleSchema>;
+export type OrganizationMemberView = z.infer<typeof OrganizationMemberViewSchema>;
+export type InvitationView = z.infer<typeof InvitationViewSchema>;
 export type ResolvedOrganizationAccess = z.infer<typeof ResolvedOrganizationAccessSchema>;
 export type OrganizationPermission = typeof rolePermissions[OrganizationRole][number];
 

@@ -30,4 +30,45 @@ describe('OrganizationAccessRepository', () => {
     const repository = new OrganizationAccessRepository(async () => []);
     expect(await repository.findActiveAccessBySessionHash('hashed-token', 'other-org')).toBeNull();
   });
+
+  test('scopes member lists to the resolved organization', async () => {
+    let capturedSql = '';
+    let capturedParams: unknown[] = [];
+    const repository = new OrganizationAccessRepository(async (sql, params) => {
+      capturedSql = sql;
+      capturedParams = params ?? [];
+      return [{ id: 'member-1', name: 'Asha Admin', email: 'asha@acme.test', role: 'admin', joined_at: new Date('2026-08-09'), is_current_user: true }];
+    });
+    const members = await repository.listMembers('org-1', 'user-1');
+    expect(capturedSql).toContain('organization_members.organization_id = $1');
+    expect(capturedParams).toEqual(['org-1', 'user-1']);
+    expect(members[0].isCurrentUser).toBe(true);
+  });
+
+  test('creates an invitation and audit event in one statement', async () => {
+    let capturedSql = '';
+    let capturedParams: unknown[] = [];
+    const repository = new OrganizationAccessRepository(async (sql, params) => {
+      capturedSql = sql;
+      capturedParams = params ?? [];
+      return [{ created: true }];
+    });
+    expect(await repository.createInvitation({ id: 'invite-1', organizationId: 'org-1', email: 'reviewer@acme.test', role: 'technical_reviewer', tokenHash: 'hash', invitedById: 'user-1', expiresAt: new Date('2026-08-16'), auditEventId: 'audit-1' })).toBe(true);
+    expect(capturedSql).toContain('invitation.created');
+    expect(capturedSql).toContain('INSERT INTO audit_events');
+    expect(capturedParams[1]).toBe('org-1');
+  });
+
+  test('role changes require both membership and organization identifiers', async () => {
+    let capturedSql = '';
+    let capturedParams: unknown[] = [];
+    const repository = new OrganizationAccessRepository(async (sql, params) => {
+      capturedSql = sql;
+      capturedParams = params ?? [];
+      return [{ changed: true }];
+    });
+    expect(await repository.updateMemberRole({ organizationId: 'org-1', membershipId: 'member-2', actorUserId: 'user-1', role: 'hiring_manager', auditEventId: 'audit-1' })).toBe(true);
+    expect(capturedSql).toContain('id = $1 AND organization_id = $2');
+    expect(capturedParams.slice(0, 2)).toEqual(['member-2', 'org-1']);
+  });
 });
