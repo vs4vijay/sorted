@@ -311,6 +311,101 @@ model CriterionEvaluation {
   @@map("criterion_evaluations")
 }
 
+enum PanelReviewState {
+  not_started
+  in_review
+  submitted
+  changes_requested
+}
+
+enum ReviewerRecommendation {
+  shortlist
+  hold
+  needs_information
+  do_not_advance
+}
+
+model ReviewAssignment {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateEvaluationId String @map("candidate_evaluation_id")
+  reviewerMemberId String @map("reviewer_member_id")
+  state PanelReviewState @default(not_started)
+  assignedById String @map("assigned_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@unique([organizationId, candidateEvaluationId, reviewerMemberId])
+  @@index([organizationId, reviewerMemberId, state])
+  @@map("review_assignments")
+}
+
+model PanelReview {
+  id String @id
+  organizationId String @map("organization_id")
+  assignmentId String @map("assignment_id")
+  candidateEvaluationId String @map("candidate_evaluation_id")
+  reviewerMemberId String @map("reviewer_member_id")
+  recommendation ReviewerRecommendation
+  summary String
+  criterionFeedback Json @map("criterion_feedback")
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  @@index([organizationId, candidateEvaluationId, submittedAt])
+  @@map("panel_reviews")
+}
+
+model ReviewComment {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateEvaluationId String @map("candidate_evaluation_id")
+  criterionId String? @map("criterion_id")
+  evidenceClaimId String? @map("evidence_claim_id")
+  authorMemberId String @map("author_member_id")
+  body String
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, candidateEvaluationId, createdAt])
+  @@map("review_comments")
+}
+
+model ShortlistDecision {
+  id String @id
+  organizationId String @map("organization_id")
+  candidateEvaluationId String @map("candidate_evaluation_id")
+  candidateId String @map("candidate_id")
+  positionId String @map("position_id")
+  decision String
+  rationale String
+  decidedById String @map("decided_by_id")
+  decidedAt DateTime @default(now()) @map("decided_at")
+  @@index([organizationId, candidateEvaluationId, decidedAt])
+  @@map("shortlist_decisions")
+}
+
+model DecisionEvent {
+  id String @id
+  organizationId String @map("organization_id")
+  shortlistDecisionId String @map("shortlist_decision_id")
+  eventType String @map("event_type")
+  actorUserId String @map("actor_user_id")
+  metadata Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, shortlistDecisionId, createdAt])
+  @@map("decision_events")
+}
+
+model Notification {
+  id String @id
+  organizationId String @map("organization_id")
+  recipientMemberId String @map("recipient_member_id")
+  kind String
+  subjectType String @map("subject_type")
+  subjectId String @map("subject_id")
+  body String
+  readAt DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, recipientMemberId, createdAt])
+  @@map("notifications")
+}
+
 model IngestionRun {
   id String @id
   organizationId String @map("organization_id")

@@ -17,7 +17,8 @@ describe('organization access contracts', () => {
   });
 
   test('keeps technical reviewers away from organization and export permissions', () => {
-    expect(roleCan('technical_reviewer', 'reviews:submit')).toBe(true);
+expect(roleCan('technical_reviewer', 'reviews:submit')).toBe(true);
+expect(roleCan('admin', 'shortlist:decide')).toBe(true);
     expect(roleCan('technical_reviewer', 'organization:manage')).toBe(false);
     expect(roleCan('technical_reviewer', 'candidates:export')).toBe(false);
   });

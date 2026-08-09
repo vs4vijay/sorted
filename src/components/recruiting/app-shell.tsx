@@ -9,6 +9,7 @@ const navigation = [
   { href: '/', label: 'Dashboard', icon: 'grid' as const },
   { href: '/positions', label: 'Positions', icon: 'briefcase' as const },
   { href: '/candidates', label: 'Candidates', icon: 'users' as const },
+  { href: '/reviews', label: 'Reviews', icon: 'check' as const },
   { href: '/outreach', label: 'Outreach', icon: 'send' as const },
 ];
 

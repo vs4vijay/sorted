@@ -7,6 +7,7 @@ import { addEvidenceClaim, reviewEvidenceClaim } from "../actions";
 import { matchCandidate } from "../actions";
 import { PositionRepository } from "@/features/positions/repositories/position-repository";
 import { EvaluationRepository } from "@/features/evaluations/repositories/evaluation-repository";
+import { roleCan } from "@/features/organizations/schemas/access";
 const title = (value: unknown) => String(value ?? "").replaceAll("_", " ");
 export default async function CandidatePage({
   params,
@@ -23,7 +24,10 @@ export default async function CandidatePage({
   if (!profile) notFound();
   const candidate = profile.candidate,
     name = String(candidate.display_name);
-  const claims = profile.claims;
+  const canManageCandidates=roleCan(access.membership.role,"candidates:manage");
+  const claims = access.membership.role === "technical_reviewer"
+    ? profile.claims.filter((claim) => !/(ctc|compensation|salary|pay)/i.test(`${claim.label} ${claim.claim_type}`))
+    : profile.claims;
   const grouped = Object.groupBy(claims, (c) => String(c.claim_type));
   const reviewed = claims.filter((c) => c.latest_review_action).length;
   const unknown = [
@@ -148,7 +152,7 @@ export default async function CandidatePage({
                           {String(claim.review_reason)}. Original retained.
                         </p>
                       )}
-                      <form
+                      {canManageCandidates && <form
                         action={reviewEvidenceClaim}
                         className="claim-review-form"
                       >
@@ -191,14 +195,14 @@ export default async function CandidatePage({
                         >
                           Reject
                         </button>
-                      </form>
+                      </form>}
                     </div>
                   </details>
                 ))}
               </section>
             ))
           )}
-          <section className="add-claim">
+          {canManageCandidates && <section className="add-claim">
             <h3>Add recruiter-evidenced claim</h3>
             <form action={addEvidenceClaim} className="claim-add-form">
               <input type="hidden" name="candidateId" value={id} />
@@ -233,7 +237,7 @@ export default async function CandidatePage({
               <textarea name="excerpt" placeholder="Supporting excerpt" />
               <button className="button primary">Add claim</button>
             </form>
-          </section>
+          </section>}
         </main>
         <aside className="surface overview-panel">
           <span className="eyebrow">PROFILE OVERVIEW</span>

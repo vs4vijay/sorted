@@ -102,7 +102,7 @@ export type ResolvedOrganizationAccess = z.infer<typeof ResolvedOrganizationAcce
 export type OrganizationPermission = typeof rolePermissions[OrganizationRole][number];
 
 export const rolePermissions = {
-  admin: ['organization:manage', 'members:manage', 'candidates:manage', 'candidates:export', 'positions:manage', 'rubrics:approve', 'reviews:submit'],
+  admin: ['organization:manage', 'members:manage', 'candidates:manage', 'candidates:export', 'positions:manage', 'rubrics:approve', 'reviews:submit', 'shortlist:decide'],
   recruiter: ['candidates:manage', 'candidates:export', 'positions:manage', 'reviews:submit'],
   hiring_manager: ['positions:manage', 'rubrics:approve', 'reviews:submit', 'shortlist:decide'],
   technical_reviewer: ['reviews:submit'],
