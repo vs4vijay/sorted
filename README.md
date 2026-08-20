@@ -86,7 +86,7 @@ Highlights (details in DEPLOYMENT.md):
 
 - The blueprint uses Render's free tier. The web service spins down after ~15 minutes idle, and free PostgreSQL instances expire after 30 days — upgrade before then if the environment should persist.
 - Production runs on `DATABASE_URL="postgresql://…"`; the app falls back to local PGlite only when the URL starts with `file:`.
-- Schema changes ship as new migrations under `prisma/migrations/` (`bun run db:migrate` locally, `prisma migrate deploy` on deploy). Never `db:push` against the production database...
+- Schema changes ship as new migrations under `prisma/migrations/` (`bun run db:migrate` locally, `prisma migrate deploy` on deploy). Never `db:push` against the production database.
 - Set `APP_URL` to the onrender.com URL after the first deploy; add `SARVAM_API_KEY` as a server-only environment variable when a Sarvam-backed slice ships (never `NEXT_PUBLIC_`).
 
 ## Verification
